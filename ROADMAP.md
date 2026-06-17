@@ -237,13 +237,13 @@ Goal: move from scattered command logic to one shared controller that owns confi
 
 ### Work items
 
-- [ ] Introduce a broader MultiCodex controller instead of having footer logic own the only controller-like abstraction
-- [ ] Let commands call controller methods instead of duplicating state access and persistence logic
-- [ ] Keep durable config separate from runtime status and cached usage
-- [ ] Move verify logic into the controller
-- [ ] Move reset logic into the controller
-- [ ] Provide a stable path API for config and storage reporting
-- [ ] Keep hooks and command handlers thin by pushing orchestration into the controller
+- [x] Introduce a broader MultiCodex controller instead of having footer logic own the only controller-like abstraction
+- [x] Let commands call controller methods instead of duplicating state access and persistence logic
+- [x] Keep durable config separate from runtime status and cached usage
+- [x] Move verify logic into the controller
+- [x] Move reset logic into the controller
+- [x] Provide a stable path API for config and storage reporting
+- [x] Keep hooks and command handlers thin by pushing orchestration into the controller
 
 ### Target controller responsibilities
 
@@ -314,7 +314,7 @@ Goal: confirm runtime behavior stays correct as the command model and controller
 5. ~~Move footer settings under the command family.~~ Done. Immediate persistence still pending.
 6. ~~Add `verify`, `path`, `reset`, and `help`.~~ Done.
 7. ~~Document the behavior contract in README.~~ Done.
-8. Introduce the broader MultiCodex controller.
+8. ~~Introduce the broader MultiCodex controller.~~ Done.
 9. ~~Add configurable rotation settings.~~ Done.
 10. Review state restoration and lifecycle handling after the controller migration.
 

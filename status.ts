@@ -503,6 +503,14 @@ export function createUsageStatusController(accountManager: AccountManager) {
 		}
 	}
 
+	async function setPreferences(
+		nextPreferences: FooterPreferences,
+	): Promise<void> {
+		preferences = nextPreferences;
+		livePreviewPreferences = undefined;
+		await persistFooterPreferences(preferences);
+	}
+
 	function renderPreviewLabel(
 		ctx: ExtensionContext,
 		theme: ExtensionCommandContext["ui"]["theme"],
@@ -563,14 +571,13 @@ export function createUsageStatusController(accountManager: AccountManager) {
 			};
 		});
 
-		preferences = draft;
-		livePreviewPreferences = undefined;
-		await persistFooterPreferences(preferences);
+		await setPreferences(draft);
 		await refreshFor(ctx);
 	}
 
 	return {
 		loadPreferences,
+		setPreferences,
 		openPreferencesPanel,
 		refreshFor,
 		scheduleModelSelectRefresh,

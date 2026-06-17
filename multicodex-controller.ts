@@ -40,6 +40,9 @@ export interface ResetSummary {
 export interface MultiCodexController {
 	readonly accountManager: AccountManager;
 	loadPreferences(ctx?: ExtensionContext): Promise<void>;
+	setFooterPreferences(preferences: FooterPreferences): Promise<void>;
+	setManualAccount(email: string): void;
+	clearManualAccount(): void;
 	openPreferencesPanel(ctx: ExtensionCommandContext): Promise<void>;
 	refreshFor(ctx: ExtensionContext): Promise<void>;
 	scheduleModelSelectRefresh(ctx: ExtensionContext): void;
@@ -272,8 +275,8 @@ export function createMultiCodexController(
 		if (accountManager.getAccounts().length === 0) return;
 		statusController.startAutoRefresh();
 		void restoreSessionState(warningHandler).catch(() => {});
-		await loadFooterPreferences(ctx);
-		await loadRotationPreferences();
+		await controller.loadPreferences(ctx);
+		await controller.loadRotationPreferences();
 		await statusController.refreshFor(ctx);
 	}
 
@@ -317,11 +320,8 @@ export function createMultiCodexController(
 
 	async function runFooterCommand(ctx: ExtensionCommandContext): Promise<void> {
 		if (!ctx.hasUI) {
-			await loadFooterPreferences(ctx);
-			ctx.ui.notify(
-				formatFooterSummary(statusController.getPreferences()),
-				"info",
-			);
+			await controller.loadPreferences(ctx);
+			ctx.ui.notify(formatFooterSummary(controller.getPreferences()), "info");
 			return;
 		}
 
@@ -331,10 +331,10 @@ export function createMultiCodexController(
 	async function runRotationCommand(
 		ctx: ExtensionCommandContext,
 	): Promise<void> {
-		await loadRotationPreferences();
-		let draft = accountManager.getRotationPreferences();
+		await controller.loadRotationPreferences();
+		let draft = controller.getRotationPreferences();
 		const renderPreviewLabel = (): string =>
-			`Preview: ${accountManager.getRotationSummaryLines().join(" • ")}`;
+			`Preview: ${controller.getRotationSummaryLines().join(" • ")}`;
 
 		if (!ctx.hasUI) {
 			ctx.ui.notify(renderPreviewLabel(), "info");
@@ -365,7 +365,7 @@ export function createMultiCodexController(
 				getSettingsListTheme(),
 				(id: string, newValue: string) => {
 					draft = applyRotationSettingChange(draft, id, newValue);
-					accountManager.setRotationPreferences(draft);
+					controller.setRotationPreferences(draft);
 					settingsList.updateValue(id, newValue);
 					previewText.setText(theme.fg("dim", renderPreviewLabel()));
 					container.invalidate();
@@ -384,12 +384,10 @@ export function createMultiCodexController(
 	}
 
 	async function runVerifyCommand(ctx: ExtensionCommandContext): Promise<void> {
-		const summary = await getVerifySummary();
-		await loadFooterPreferences(ctx);
-		await loadRotationPreferences();
-		const rotationSummary = accountManager
-			.getRotationSummaryLines()
-			.join(" | ");
+		const summary = await controller.getVerifySummary();
+		await controller.loadPreferences(ctx);
+		await controller.loadRotationPreferences();
+		const rotationSummary = controller.getRotationSummaryLines().join(" | ");
 
 		if (!ctx.hasUI) {
 			ctx.ui.notify(
@@ -411,7 +409,7 @@ export function createMultiCodexController(
 	}
 
 	async function runPathCommand(ctx: ExtensionCommandContext): Promise<void> {
-		const paths = getConfigPaths();
+		const paths = controller.getConfigPaths();
 		if (!ctx.hasUI) {
 			ctx.ui.notify(
 				`paths: storage=${paths.storage} settings=${paths.settings}`,
@@ -438,7 +436,7 @@ export function createMultiCodexController(
 			if (!confirmed) return;
 		}
 
-		const summary = resetState(target);
+		const summary = controller.resetState(target);
 		ctx.ui.notify(
 			`reset: target=${target} manualCleared=${summary.manualCleared ? "yes" : "no"} quotaCleared=${summary.quotaCleared}`,
 			"info",
@@ -448,8 +446,11 @@ export function createMultiCodexController(
 
 	controller = {
 		accountManager,
-		loadPreferences: (ctx?: ExtensionContext) =>
-			statusController.loadPreferences(ctx),
+		loadPreferences: loadFooterPreferences,
+		setFooterPreferences: (preferences: FooterPreferences) =>
+			statusController.setPreferences(preferences),
+		setManualAccount: (email: string) => accountManager.setManualAccount(email),
+		clearManualAccount: () => accountManager.clearManualAccount(),
 		openPreferencesPanel: (ctx: ExtensionCommandContext) =>
 			statusController.openPreferencesPanel(ctx),
 		refreshFor: (ctx: ExtensionContext) => statusController.refreshFor(ctx),

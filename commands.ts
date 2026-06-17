@@ -219,6 +219,7 @@ async function loginAndActivateAccount(
 	pi: ExtensionAPI,
 	ctx: ExtensionCommandContext,
 	accountManager: AccountManager,
+	statusController: MultiCodexController,
 	identifier: string,
 ): Promise<string | undefined> {
 	try {
@@ -237,7 +238,7 @@ async function loginAndActivateAccount(
 		});
 
 		const account = accountManager.addOrUpdateAccount(identifier, creds);
-		accountManager.setManualAccount(account.email);
+		statusController.setManualAccount(account.email);
 		ctx.ui.notify(`Now using ${account.email}`, "info");
 		return account.email;
 	} catch (error) {
@@ -250,13 +251,14 @@ async function useOrLoginAccount(
 	pi: ExtensionAPI,
 	ctx: ExtensionCommandContext,
 	accountManager: AccountManager,
+	statusController: MultiCodexController,
 	identifier: string,
 ): Promise<void> {
 	const existing = accountManager.getAccount(identifier);
 	if (existing) {
 		try {
 			await accountManager.ensureValidToken(existing);
-			accountManager.setManualAccount(existing.email);
+			statusController.setManualAccount(existing.email);
 			ctx.ui.notify(`Now using ${existing.email}`, "info");
 			return;
 		} catch {
@@ -267,7 +269,13 @@ async function useOrLoginAccount(
 		}
 	}
 
-	await loginAndActivateAccount(pi, ctx, accountManager, identifier);
+	await loginAndActivateAccount(
+		pi,
+		ctx,
+		accountManager,
+		statusController,
+		identifier,
+	);
 }
 
 async function refreshSingleAccount(
@@ -316,6 +324,7 @@ async function reauthenticateAccount(
 	pi: ExtensionAPI,
 	ctx: ExtensionCommandContext,
 	accountManager: AccountManager,
+	statusController: MultiCodexController,
 	email: string,
 ): Promise<void> {
 	const account = accountManager.getAccount(email);
@@ -323,7 +332,13 @@ async function reauthenticateAccount(
 		ctx.ui.notify(`Unknown account: ${email}`, "warning");
 		return;
 	}
-	await loginAndActivateAccount(pi, ctx, accountManager, account.email);
+	await loginAndActivateAccount(
+		pi,
+		ctx,
+		accountManager,
+		statusController,
+		account.email,
+	);
 }
 
 async function promptForNewAccountIdentifier(
@@ -586,7 +601,13 @@ async function openAccountManagementFlow(
 		if (accounts.length === 0) {
 			const identifier = await promptForNewAccountIdentifier(ctx);
 			if (!identifier) return;
-			await loginAndActivateAccount(pi, ctx, accountManager, identifier);
+			await loginAndActivateAccount(
+				pi,
+				ctx,
+				accountManager,
+				statusController,
+				identifier,
+			);
 			await statusController.refreshFor(ctx);
 			continue;
 		}
@@ -597,13 +618,25 @@ async function openAccountManagementFlow(
 		if (result.action === "add") {
 			const identifier = await promptForNewAccountIdentifier(ctx);
 			if (!identifier) continue;
-			await loginAndActivateAccount(pi, ctx, accountManager, identifier);
+			await loginAndActivateAccount(
+				pi,
+				ctx,
+				accountManager,
+				statusController,
+				identifier,
+			);
 			await statusController.refreshFor(ctx);
 			continue;
 		}
 
 		if (result.action === "select") {
-			await useOrLoginAccount(pi, ctx, accountManager, result.email);
+			await useOrLoginAccount(
+				pi,
+				ctx,
+				accountManager,
+				statusController,
+				result.email,
+			);
 			await statusController.refreshFor(ctx);
 			return;
 		}
@@ -615,7 +648,13 @@ async function openAccountManagementFlow(
 		}
 
 		if (result.action === "reauth") {
-			await reauthenticateAccount(pi, ctx, accountManager, result.email);
+			await reauthenticateAccount(
+				pi,
+				ctx,
+				accountManager,
+				statusController,
+				result.email,
+			);
 			await statusController.refreshFor(ctx);
 			continue;
 		}
@@ -649,7 +688,7 @@ export async function runAccountsSubcommand(
 	await accountManager.refreshUsageForAllAccounts();
 
 	if (rest) {
-		await useOrLoginAccount(pi, ctx, accountManager, rest);
+		await useOrLoginAccount(pi, ctx, accountManager, statusController, rest);
 		await statusController.refreshFor(ctx);
 		return;
 	}
@@ -787,7 +826,13 @@ export async function runReauthSubcommand(
 	rest: string,
 ): Promise<void> {
 	if (rest) {
-		await reauthenticateAccount(pi, ctx, accountManager, rest);
+		await reauthenticateAccount(
+			pi,
+			ctx,
+			accountManager,
+			statusController,
+			rest,
+		);
 		await statusController.refreshFor(ctx);
 		return;
 	}
@@ -797,7 +842,13 @@ export async function runReauthSubcommand(
 			ctx.ui.notify(NO_ACCOUNTS_MESSAGE, "warning");
 			return;
 		}
-		await reauthenticateAccount(pi, ctx, accountManager, active.email);
+		await reauthenticateAccount(
+			pi,
+			ctx,
+			accountManager,
+			statusController,
+			active.email,
+		);
 		return;
 	}
 	await openAccountManagementFlow(pi, ctx, accountManager, statusController);
