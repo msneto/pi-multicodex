@@ -1,5 +1,5 @@
-import { getApiProvider } from "@mariozechner/pi-ai";
-import { mirrorProvider } from "pi-provider-utils/providers";
+import { getApiProvider, getModels } from "@earendil-works/pi-ai";
+
 import type { AccountManager } from "./account-manager";
 import { createStreamWrapper } from "./stream-wrapper";
 
@@ -24,13 +24,10 @@ export function getOpenAICodexMirror(): {
 	baseUrl: string;
 	models: ProviderModelDef[];
 } {
-	const mirror = mirrorProvider("openai-codex");
-	if (!mirror) {
-		return { baseUrl: "https://chatgpt.com/backend-api", models: [] };
-	}
+	const models = getModels("openai-codex");
 	return {
-		baseUrl: mirror.baseUrl,
-		models: mirror.models.map((m) => ({
+		baseUrl: models[0]?.baseUrl ?? "https://chatgpt.com/backend-api",
+		models: models.map((m) => ({
 			id: m.id,
 			name: m.name,
 			reasoning: m.reasoning,

@@ -12,6 +12,13 @@ export {
 	isAccountAvailable,
 	pickBestAccount,
 } from "./selection";
+export { createMultiCodexController } from "./multicodex-controller";
+export type {
+	MultiCodexController,
+	ResetSummary,
+	ResetTarget,
+	VerifySummary,
+} from "./multicodex-controller";
 export {
 	createUsageStatusController,
 	formatActiveAccountStatus,

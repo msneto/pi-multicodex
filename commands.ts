@@ -1,11 +1,9 @@
-import { promises as fs, constants as fsConstants } from "node:fs";
-import path from "node:path";
-import { loginOpenAICodex } from "@mariozechner/pi-ai/oauth";
+import { loginOpenAICodex } from "@earendil-works/pi-ai/oauth";
 import type {
 	ExtensionAPI,
 	ExtensionCommandContext,
-} from "@mariozechner/pi-coding-agent";
-import { DynamicBorder, rawKeyHint } from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
+import { DynamicBorder, rawKeyHint } from "@earendil-works/pi-coding-agent";
 import {
 	type AutocompleteItem,
 	Container,
@@ -14,16 +12,14 @@ import {
 	Spacer,
 	truncateToWidth,
 	visibleWidth,
-} from "@mariozechner/pi-tui";
-import { getAgentSettingsPath } from "pi-provider-utils/agent-paths";
+} from "@earendil-works/pi-tui";
 import { normalizeUnknownError } from "pi-provider-utils/streams";
 import type { AccountManager } from "./account-manager";
 import { openLoginInBrowser } from "./browser";
-import type { createUsageStatusController } from "./status";
-import { type Account, STORAGE_FILE } from "./storage";
+import type { MultiCodexController } from "./multicodex-controller";
+import { type Account } from "./storage";
 import { formatResetAt, isUsageUntouched } from "./usage";
 
-const SETTINGS_FILE = getAgentSettingsPath();
 const NO_ACCOUNTS_MESSAGE =
 	"No managed accounts found. Open /multicodex accounts to add one.";
 const HELP_TEXT =
@@ -583,7 +579,7 @@ async function openAccountManagementFlow(
 	pi: ExtensionAPI,
 	ctx: ExtensionCommandContext,
 	accountManager: AccountManager,
-	statusController: ReturnType<typeof createUsageStatusController>,
+	statusController: MultiCodexController,
 ): Promise<void> {
 	while (true) {
 		const accounts = accountManager.getAccounts();
@@ -643,11 +639,11 @@ async function openAccountManagementFlow(
 	}
 }
 
-async function runAccountsSubcommand(
+export async function runAccountsSubcommand(
 	pi: ExtensionAPI,
 	ctx: ExtensionCommandContext,
 	accountManager: AccountManager,
-	statusController: ReturnType<typeof createUsageStatusController>,
+	statusController: MultiCodexController,
 	rest: string,
 ): Promise<void> {
 	await accountManager.refreshUsageForAllAccounts();
@@ -679,111 +675,16 @@ async function runAccountsSubcommand(
 	await openAccountManagementFlow(pi, ctx, accountManager, statusController);
 }
 
-async function runShowSubcommand(
+export async function runShowSubcommand(
 	pi: ExtensionAPI,
 	ctx: ExtensionCommandContext,
 	accountManager: AccountManager,
-	statusController: ReturnType<typeof createUsageStatusController>,
+	statusController: MultiCodexController,
 ): Promise<void> {
 	await runAccountsSubcommand(pi, ctx, accountManager, statusController, "");
 }
 
-async function runFooterSubcommand(
-	ctx: ExtensionCommandContext,
-	statusController: ReturnType<typeof createUsageStatusController>,
-): Promise<void> {
-	if (!ctx.hasUI) {
-		await statusController.loadPreferences(ctx);
-		const preferences = statusController.getPreferences();
-		ctx.ui.notify(
-			`footer: usageMode=${preferences.usageMode} resetWindow=${preferences.resetWindow} showAccount=${preferences.showAccount ? "on" : "off"} showReset=${preferences.showReset ? "on" : "off"} order=${preferences.order}`,
-			"info",
-		);
-		return;
-	}
-
-	await statusController.openPreferencesPanel(ctx);
-}
-
-async function runRotationSubcommand(
-	ctx: ExtensionCommandContext,
-): Promise<void> {
-	const lines = [
-		"Current policy: manual account first, then untouched accounts, then earliest weekly reset, then random fallback.",
-		"If token validation fails before a request starts, MultiCodex skips that account and retries another one.",
-		"If a request hits quota or rate limit before any output streams, MultiCodex marks the account on cooldown and retries.",
-		"If pi auth is active, it participates in rotation as an ephemeral account without being persisted.",
-	];
-
-	if (!ctx.hasUI) {
-		ctx.ui.notify(lines.join(" "), "info");
-		return;
-	}
-
-	await ctx.ui.select("MultiCodex Rotation", lines);
-}
-
-async function isWritableDirectoryFor(filePath: string): Promise<boolean> {
-	try {
-		const directory = path.dirname(filePath);
-		await fs.mkdir(directory, { recursive: true });
-		await fs.access(directory, fsConstants.R_OK | fsConstants.W_OK);
-		return true;
-	} catch {
-		return false;
-	}
-}
-
-async function runVerifySubcommand(
-	ctx: ExtensionCommandContext,
-	accountManager: AccountManager,
-	statusController: ReturnType<typeof createUsageStatusController>,
-): Promise<void> {
-	const storageWritable = await isWritableDirectoryFor(STORAGE_FILE);
-	const settingsWritable = await isWritableDirectoryFor(SETTINGS_FILE);
-	await statusController.loadPreferences(ctx);
-	const hasPiAuth = accountManager
-		.getAccounts()
-		.some((a) => accountManager.isPiAuthAccount(a));
-	const accounts = accountManager.getAccounts().length;
-	const active = accountManager.getActiveAccount()?.email ?? "none";
-	const needsReauth = accountManager.getAccountsNeedingReauth().length;
-	const ok = storageWritable && settingsWritable && needsReauth === 0;
-
-	if (!ctx.hasUI) {
-		ctx.ui.notify(
-			`verify: ${ok ? "PASS" : "WARN"} storage=${storageWritable ? "ok" : "fail"} settings=${settingsWritable ? "ok" : "fail"} accounts=${accounts} active=${active} piAuth=${hasPiAuth ? "loaded" : "none"} needsReauth=${needsReauth}`,
-			ok ? "info" : "warning",
-		);
-		return;
-	}
-
-	const lines = [
-		`storage directory writable: ${storageWritable ? "yes" : "no"}`,
-		`settings directory writable: ${settingsWritable ? "yes" : "no"}`,
-		`managed accounts: ${accounts}`,
-		`active account: ${active}`,
-		`pi auth (ephemeral): ${hasPiAuth ? "loaded" : "none"}`,
-		`accounts needing re-authentication: ${needsReauth}`,
-	];
-	await ctx.ui.select(`MultiCodex Verify (${ok ? "PASS" : "WARN"})`, lines);
-}
-
-async function runPathSubcommand(ctx: ExtensionCommandContext): Promise<void> {
-	if (!ctx.hasUI) {
-		ctx.ui.notify(
-			`paths: storage=${STORAGE_FILE} settings=${SETTINGS_FILE}`,
-			"info",
-		);
-		return;
-	}
-
-	await ctx.ui.select("MultiCodex Paths", [
-		`Managed account storage: ${STORAGE_FILE}`,
-		`Extension settings: ${SETTINGS_FILE}`,
-	]);
-}
-
+     
 async function chooseResetTarget(
 	ctx: ExtensionCommandContext,
 	argument: string,
@@ -816,51 +717,53 @@ async function chooseResetTarget(
 	if (selected.startsWith("quota")) return "quota";
 	return "all";
 }
+async function runFooterSubcommand(
+	ctx: ExtensionCommandContext,
+	statusController: MultiCodexController,
+): Promise<void> {
+	await statusController.runFooterCommand(ctx);
+}
+
+async function runRotationSubcommand(
+	ctx: ExtensionCommandContext,
+	statusController: MultiCodexController,
+): Promise<void> {
+	await statusController.runRotationCommand(ctx);
+}
+
+async function runVerifySubcommand(
+	ctx: ExtensionCommandContext,
+	statusController: MultiCodexController,
+): Promise<void> {
+	await statusController.runVerifyCommand(ctx);
+}
+
+async function runPathSubcommand(
+	ctx: ExtensionCommandContext,
+	statusController: MultiCodexController,
+): Promise<void> {
+	await statusController.runPathCommand(ctx);
+}
 
 async function runResetSubcommand(
 	ctx: ExtensionCommandContext,
-	accountManager: AccountManager,
-	statusController: ReturnType<typeof createUsageStatusController>,
+	statusController: MultiCodexController,
 	rest: string,
 ): Promise<void> {
 	const target = await chooseResetTarget(ctx, rest);
 	if (!target) return;
-
-	if (target === "all" && ctx.hasUI) {
-		const confirmed = await ctx.ui.confirm(
-			"Reset MultiCodex state",
-			"Clear manual account override and all quota cooldown markers?",
-		);
-		if (!confirmed) return;
-	}
-
-	const hadManual = accountManager.hasManualAccount();
-	if (target === "manual" || target === "all") {
-		accountManager.clearManualAccount();
-	}
-
-	let clearedQuota = 0;
-	if (target === "quota" || target === "all") {
-		clearedQuota = accountManager.clearAllQuotaExhaustion();
-	}
-
-	const manualCleared = hadManual && !accountManager.hasManualAccount();
-	ctx.ui.notify(
-		`reset: target=${target} manualCleared=${manualCleared ? "yes" : "no"} quotaCleared=${clearedQuota}`,
-		"info",
-	);
-	await statusController.refreshFor(ctx);
+	await statusController.runResetCommand(ctx, target);
 }
 
 function runHelpSubcommand(ctx: ExtensionCommandContext): void {
 	ctx.ui.notify(HELP_TEXT, "info");
 }
 
-async function runRefreshSubcommand(
+export async function runRefreshSubcommand(
 	pi: ExtensionAPI,
 	ctx: ExtensionCommandContext,
 	accountManager: AccountManager,
-	statusController: ReturnType<typeof createUsageStatusController>,
+	statusController: MultiCodexController,
 	rest: string,
 ): Promise<void> {
 	if (!rest || rest === "all") {
@@ -876,11 +779,11 @@ async function runRefreshSubcommand(
 	await statusController.refreshFor(ctx);
 }
 
-async function runReauthSubcommand(
+export async function runReauthSubcommand(
 	pi: ExtensionAPI,
 	ctx: ExtensionCommandContext,
 	accountManager: AccountManager,
-	statusController: ReturnType<typeof createUsageStatusController>,
+	statusController: MultiCodexController,
 	rest: string,
 ): Promise<void> {
 	if (rest) {
@@ -906,28 +809,22 @@ async function runSubcommand(
 	pi: ExtensionAPI,
 	ctx: ExtensionCommandContext,
 	accountManager: AccountManager,
-	statusController: ReturnType<typeof createUsageStatusController>,
+	statusController: MultiCodexController,
 ): Promise<void> {
 	if (subcommand === "accounts" || subcommand === "use") {
-		await runAccountsSubcommand(
-			pi,
-			ctx,
-			accountManager,
-			statusController,
-			rest,
-		);
+		await statusController.runAccountsCommand(pi, ctx, rest);
 		return;
 	}
 	if (subcommand === "show") {
-		await runShowSubcommand(pi, ctx, accountManager, statusController);
+		await statusController.runShowCommand(pi, ctx);
 		return;
 	}
 	if (subcommand === "refresh") {
-		await runRefreshSubcommand(pi, ctx, accountManager, statusController, rest);
+		await statusController.runRefreshCommand(pi, ctx, rest);
 		return;
 	}
 	if (subcommand === "reauth") {
-		await runReauthSubcommand(pi, ctx, accountManager, statusController, rest);
+		await statusController.runReauthCommand(pi, ctx, rest);
 		return;
 	}
 	if (subcommand === "footer") {
@@ -935,19 +832,19 @@ async function runSubcommand(
 		return;
 	}
 	if (subcommand === "rotation") {
-		await runRotationSubcommand(ctx);
+		await runRotationSubcommand(ctx, statusController);
 		return;
 	}
 	if (subcommand === "verify") {
-		await runVerifySubcommand(ctx, accountManager, statusController);
+		await runVerifySubcommand(ctx, statusController);
 		return;
 	}
 	if (subcommand === "path") {
-		await runPathSubcommand(ctx);
+		await runPathSubcommand(ctx, statusController);
 		return;
 	}
 	if (subcommand === "reset") {
-		await runResetSubcommand(ctx, accountManager, statusController, rest);
+		await runResetSubcommand(ctx, statusController, rest);
 		return;
 	}
 
@@ -958,7 +855,7 @@ async function openMainPanel(
 	pi: ExtensionAPI,
 	ctx: ExtensionCommandContext,
 	accountManager: AccountManager,
-	statusController: ReturnType<typeof createUsageStatusController>,
+	statusController: MultiCodexController,
 ): Promise<void> {
 	const actions = [
 		"accounts: inspect, select, refresh, re-authenticate, add, or remove managed account",
@@ -993,7 +890,7 @@ async function openMainPanel(
 export function registerCommands(
 	pi: ExtensionAPI,
 	accountManager: AccountManager,
-	statusController: ReturnType<typeof createUsageStatusController>,
+	statusController: MultiCodexController,
 ): void {
 	pi.registerCommand("multicodex", {
 		description:

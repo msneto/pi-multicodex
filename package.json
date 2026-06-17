@@ -38,6 +38,7 @@
 		"extension.ts",
 		"hooks.ts",
 		"index.ts",
+		"multicodex-controller.ts",
 		"provider.ts",
 		"quota.ts",
 		"selection.ts",
@@ -61,18 +62,18 @@
 		"release:dry": "pnpm exec semantic-release --dry-run"
 	},
 	"peerDependencies": {
-		"@mariozechner/pi-ai": "*",
-		"@mariozechner/pi-coding-agent": "*",
-		"@mariozechner/pi-tui": "*"
+		"@earendil-works/pi-ai": "*",
+		"@earendil-works/pi-coding-agent": "*",
+		"@earendil-works/pi-tui": "*"
 	},
 	"peerDependenciesMeta": {
-		"@mariozechner/pi-ai": {
+		"@earendil-works/pi-ai": {
 			"optional": true
 		},
-		"@mariozechner/pi-coding-agent": {
+		"@earendil-works/pi-coding-agent": {
 			"optional": true
 		},
-		"@mariozechner/pi-tui": {
+		"@earendil-works/pi-tui": {
 			"optional": true
 		}
 	},
@@ -80,9 +81,9 @@
 		"@biomejs/biome": "^2.4.7",
 		"@commitlint/cli": "^20.4.4",
 		"@commitlint/config-conventional": "^20.4.4",
-		"@mariozechner/pi-ai": "^0.63.1",
-		"@mariozechner/pi-coding-agent": "^0.63.1",
-		"@mariozechner/pi-tui": "^0.63.1",
+		"@earendil-works/pi-ai": "^0.79.6",
+		"@earendil-works/pi-coding-agent": "^0.79.6",
+		"@earendil-works/pi-tui": "^0.79.6",
 		"@semantic-release/changelog": "^6.0.3",
 		"@semantic-release/commit-analyzer": "^13.0.1",
 		"@semantic-release/git": "^10.0.1",
@@ -97,7 +98,7 @@
 		"vitest": "^4.1.0"
 	},
 	"engines": {
-		"node": "24.14.0"
+		"node": ">=24.14.0"
 	},
 	"dependencies": {
 		"pi-provider-utils": "^0.0.0",

@@ -1,13 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AccountManager } from "./account-manager";
 import { registerCommands } from "./commands";
-import type { createUsageStatusController } from "./status";
+import type { MultiCodexController } from "./multicodex-controller";
 
 function createStatusControllerMock() {
 	return {
 		refreshFor: vi.fn().mockResolvedValue(undefined),
 		openPreferencesPanel: vi.fn().mockResolvedValue(undefined),
 		loadPreferences: vi.fn().mockResolvedValue(undefined),
+		runFooterCommand: vi.fn().mockResolvedValue(undefined),
+		runRotationCommand: vi.fn().mockResolvedValue(undefined),
+		runVerifyCommand: vi.fn().mockResolvedValue(undefined),
+		runPathCommand: vi.fn().mockResolvedValue(undefined),
+		runResetCommand: vi.fn().mockResolvedValue(undefined),
 		getPreferences: vi.fn(() => ({
 			usageMode: "left",
 			resetWindow: "7d",
@@ -15,7 +20,7 @@ function createStatusControllerMock() {
 			showReset: true,
 			order: "account-first",
 		})),
-	} as unknown as ReturnType<typeof createUsageStatusController>;
+	} as unknown as MultiCodexController;
 }
 
 function createAccountManagerMock(emails: string[] = []) {

@@ -1,16 +1,15 @@
 import type {
 	ExtensionAPI,
 	ExtensionContext,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 import { AccountManager } from "./account-manager";
 import { registerCommands } from "./commands";
-import { handleNewSessionSwitch, handleSessionStart } from "./hooks";
+import { createMultiCodexController } from "./multicodex-controller";
 import { buildMulticodexProviderConfig, PROVIDER_ID } from "./provider";
-import { createUsageStatusController } from "./status";
 
 export default function multicodexExtension(pi: ExtensionAPI) {
 	const accountManager = new AccountManager();
-	const statusController = createUsageStatusController(accountManager);
+	const multicodexController = createMultiCodexController(accountManager);
 	let lastContext: ExtensionContext | undefined;
 
 	accountManager.setWarningHandler((message) => {
@@ -24,44 +23,27 @@ export default function multicodexExtension(pi: ExtensionAPI) {
 		buildMulticodexProviderConfig(accountManager),
 	);
 
-	registerCommands(pi, accountManager, statusController);
+	registerCommands(pi, accountManager, multicodexController);
 
 	pi.on("session_start", (_event: unknown, ctx: ExtensionContext) => {
 		lastContext = ctx;
 		accountManager.resetSessionWarnings();
-		handleSessionStart(accountManager, (msg) => ctx.ui.notify(msg, "warning"));
-		statusController.startAutoRefresh();
-		void (async () => {
-			await statusController.loadPreferences(ctx);
-			await statusController.refreshFor(ctx);
-		})();
+		void multicodexController.startSession(ctx, (msg) => {
+			ctx.ui.notify(msg, "warning");
+		});
 	});
-
-	pi.on(
-		"session_switch",
-		(event: { reason?: string }, ctx: ExtensionContext) => {
-			lastContext = ctx;
-			if (event.reason === "new") {
-				accountManager.resetSessionWarnings();
-				handleNewSessionSwitch(accountManager, (msg) =>
-					ctx.ui.notify(msg, "warning"),
-				);
-			}
-			void statusController.refreshFor(ctx);
-		},
-	);
 
 	pi.on("turn_end", (_event: unknown, ctx: ExtensionContext) => {
 		lastContext = ctx;
-		void statusController.refreshFor(ctx);
+		void multicodexController.refreshFor(ctx);
 	});
 
 	pi.on("model_select", (_event: unknown, ctx: ExtensionContext) => {
 		lastContext = ctx;
-		statusController.scheduleModelSelectRefresh(ctx);
+		multicodexController.scheduleModelSelectRefresh(ctx);
 	});
 
 	pi.on("session_shutdown", (_event: unknown, ctx: ExtensionContext) => {
-		statusController.stopAutoRefresh(ctx);
+		multicodexController.stopSession(ctx);
 	});
 }
