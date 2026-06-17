@@ -4,6 +4,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { AccountManager } from "./account-manager";
 import { registerCommands } from "./commands";
+import { handleSessionStart, handleSessionTree } from "./hooks";
 import { createMultiCodexController } from "./multicodex-controller";
 import { buildMulticodexProviderConfig, PROVIDER_ID } from "./provider";
 
@@ -28,7 +29,15 @@ export default function multicodexExtension(pi: ExtensionAPI) {
 	pi.on("session_start", (_event: unknown, ctx: ExtensionContext) => {
 		lastContext = ctx;
 		accountManager.resetSessionWarnings();
-		void multicodexController.startSession(ctx, (msg) => {
+		handleSessionStart(multicodexController, ctx, (msg) => {
+			ctx.ui.notify(msg, "warning");
+		});
+	});
+
+	pi.on("session_tree", (_event: unknown, ctx: ExtensionContext) => {
+		lastContext = ctx;
+		accountManager.resetSessionWarnings();
+		handleSessionTree(multicodexController, ctx, (msg) => {
 			ctx.ui.notify(msg, "warning");
 		});
 	});

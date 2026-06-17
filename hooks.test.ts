@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { handleNewSessionSwitch, handleSessionStart } from "./hooks";
+import {
+	handleNewSessionSwitch,
+	handleSessionStart,
+	handleSessionTree,
+} from "./hooks";
 
 describe("handleSessionStart", () => {
 	it("does nothing when no accounts exist", () => {
@@ -42,6 +46,25 @@ describe("handleNewSessionSwitch", () => {
 		const ctx = {};
 
 		handleNewSessionSwitch(
+			{
+				accountManager: {
+					getAccounts: () => [{ email: "a@example.com" }],
+				} as never,
+				startSession,
+			} as never,
+			ctx as never,
+		);
+
+		expect(startSession).toHaveBeenCalledWith(ctx, undefined);
+	});
+});
+
+describe("handleSessionTree", () => {
+	it("starts session for tree navigation", () => {
+		const startSession = vi.fn();
+		const ctx = {};
+
+		handleSessionTree(
 			{
 				accountManager: {
 					getAccounts: () => [{ email: "a@example.com" }],

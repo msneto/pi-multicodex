@@ -321,6 +321,20 @@ function createSettingsItems(preferences: FooterPreferences): SettingItem[] {
 	];
 }
 
+function syncSettingsListValues(
+	settingsList: SettingsList,
+	preferences: FooterPreferences,
+): void {
+	settingsList.updateValue("usageMode", preferences.usageMode);
+	settingsList.updateValue("resetWindow", preferences.resetWindow);
+	settingsList.updateValue(
+		"showAccount",
+		preferences.showAccount ? "on" : "off",
+	);
+	settingsList.updateValue("showReset", preferences.showReset ? "on" : "off");
+	settingsList.updateValue("order", preferences.order);
+}
+
 function applyPreferenceChange(
 	preferences: FooterPreferences,
 	id: string,
@@ -505,7 +519,7 @@ export function createUsageStatusController(accountManager: AccountManager) {
 
 	type PreferenceSaveRequest = {
 		preferences: FooterPreferences;
-		resolve: () => void;
+		resolve: (preferences: FooterPreferences) => void;
 		reject: (error: unknown) => void;
 		ctx?: ExtensionContext | ExtensionCommandContext;
 	};
@@ -533,7 +547,17 @@ export function createUsageStatusController(accountManager: AccountManager) {
 					if (!request) continue;
 					try {
 						await persistFooterPreferences(request.preferences);
-						request.resolve();
+						const normalized = await loadFooterPreferences();
+						if (preferences === request.preferences) {
+							preferences = normalized;
+						}
+						if (livePreviewPreferences === request.preferences) {
+							livePreviewPreferences = normalized;
+						}
+						if (request.ctx && livePreviewPreferences === normalized) {
+							renderCachedStatus(request.ctx as ExtensionContext, normalized);
+						}
+						request.resolve(normalized);
 					} catch (error) {
 						notifyPreferenceSaveError(request.ctx, error);
 						request.reject(error);
@@ -549,9 +573,9 @@ export function createUsageStatusController(accountManager: AccountManager) {
 	function savePreferences(
 		nextPreferences: FooterPreferences,
 		ctx?: ExtensionContext | ExtensionCommandContext,
-	): Promise<void> {
+	): Promise<FooterPreferences> {
 		preferences = nextPreferences;
-		return new Promise<void>((resolve, reject) => {
+		return new Promise<FooterPreferences>((resolve, reject) => {
 			pendingPreferenceSaves.push({
 				preferences: nextPreferences,
 				resolve,
@@ -617,7 +641,18 @@ export function createUsageStatusController(accountManager: AccountManager) {
 					previewText.setText(renderPreviewLabel(ctx, theme, draft));
 					container.invalidate();
 					renderCachedStatus(ctx, draft);
-					void savePreferences(draft, ctx).catch(() => undefined);
+					const submittedPreferences = draft;
+					void savePreferences(submittedPreferences, ctx)
+						.then((normalized) => {
+							if (draft !== submittedPreferences) return;
+							draft = normalized;
+							livePreviewPreferences = normalized;
+							syncSettingsListValues(settingsList, normalized);
+							previewText.setText(renderPreviewLabel(ctx, theme, normalized));
+							container.invalidate();
+							renderCachedStatus(ctx, normalized);
+						})
+						.catch(() => undefined);
 				},
 				() => done(undefined),
 				{ enableSearch: true },
@@ -631,7 +666,7 @@ export function createUsageStatusController(accountManager: AccountManager) {
 			};
 		});
 
-		await setPreferences(draft, ctx);
+		draft = await savePreferences(draft, ctx);
 		await refreshFor(ctx);
 	}
 

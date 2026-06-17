@@ -148,7 +148,7 @@ describe("footer settings persistence", () => {
 		expect(firstDone).toBeGreaterThan(panelStart);
 		expect(
 			events.slice(panelStart, firstDone).filter((event) => event === "read"),
-		).toHaveLength(2);
+		).toHaveLength(4);
 		expect(settings["pi-multicodex"].usageMode).toBe("used");
 	});
 });

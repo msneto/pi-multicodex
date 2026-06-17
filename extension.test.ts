@@ -9,6 +9,9 @@ const mocks = vi.hoisted(() => ({
 	controllerRefreshFor: vi.fn(),
 	controllerStopSession: vi.fn(),
 	controllerScheduleModelSelectRefresh: vi.fn(),
+	controllerAccountManager: {
+		getAccounts: vi.fn(() => [{ email: "a@example.com" }]),
+	},
 }));
 
 vi.mock("./account-manager", () => ({
@@ -24,6 +27,7 @@ vi.mock("./commands", () => ({
 
 vi.mock("./multicodex-controller", () => ({
 	createMultiCodexController: () => ({
+		accountManager: mocks.controllerAccountManager,
 		refreshFor: mocks.controllerRefreshFor,
 		scheduleModelSelectRefresh: mocks.controllerScheduleModelSelectRefresh,
 		startSession: mocks.controllerStartSession,
@@ -68,8 +72,9 @@ describe("multicodexExtension", () => {
 			mocked: true,
 		});
 		expect(mocks.registerCommands).toHaveBeenCalledOnce();
-		expect(on).toHaveBeenCalledTimes(4);
+		expect(on).toHaveBeenCalledTimes(5);
 		expect(handlers.has("session_start")).toBe(true);
+		expect(handlers.has("session_tree")).toBe(true);
 		expect(handlers.has("turn_end")).toBe(true);
 		expect(handlers.has("model_select")).toBe(true);
 		expect(handlers.has("session_shutdown")).toBe(true);
@@ -87,17 +92,27 @@ describe("multicodexExtension", () => {
 		} as never);
 
 		const sessionStart = handlers.get("session_start");
+		const sessionTree = handlers.get("session_tree");
 		const turnEnd = handlers.get("turn_end");
 		const modelSelect = handlers.get("model_select");
 		const sessionShutdown = handlers.get("session_shutdown");
 		expect(sessionStart).toBeTypeOf("function");
+		expect(sessionTree).toBeTypeOf("function");
 		expect(turnEnd).toBeTypeOf("function");
 		expect(modelSelect).toBeTypeOf("function");
 		expect(sessionShutdown).toBeTypeOf("function");
 
 		sessionStart?.({}, ctx as never);
-		expect(mocks.resetSessionWarnings).toHaveBeenCalledTimes(1);
-		expect(mocks.controllerStartSession).toHaveBeenCalledWith(
+		sessionTree?.({}, ctx as never);
+		expect(mocks.resetSessionWarnings).toHaveBeenCalledTimes(2);
+		expect(mocks.controllerStartSession).toHaveBeenCalledTimes(2);
+		expect(mocks.controllerStartSession).toHaveBeenNthCalledWith(
+			1,
+			ctx,
+			expect.any(Function),
+		);
+		expect(mocks.controllerStartSession).toHaveBeenNthCalledWith(
+			2,
 			ctx,
 			expect.any(Function),
 		);

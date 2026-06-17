@@ -182,10 +182,9 @@ Goal: finish the footer experience so it matches the new command model and follo
 
 - [x] Move footer settings access under `/multicodex footer`
 - [x] Persist footer settings immediately on each change instead of waiting until panel close
-- [ ] Re-read normalized settings after save when needed so the UI reflects persisted truth
+- [x] Re-read normalized settings after save when needed so the UI reflects persisted truth
 - [x] Add a non-UI footer summary path under `/multicodex footer` for non-interactive mode
 - [x] Keep live preview behavior while switching to immediate persistence
-
 ### Footer acceptance criteria
 
 - footer changes survive panel exit failures because persistence happens during editing
@@ -294,7 +293,7 @@ Goal: confirm runtime behavior stays correct as the command model and controller
 
 ### Work items
 
-- [ ] Review whether session restoration should also handle `session_tree` and `session_fork` in addition to the current startup and switch events
+- [x] Review whether session restoration should also handle `session_tree`; fork flows already re-enter through `session_start`
 - [ ] Confirm manual override semantics remain correct across reloads and new sessions
 - [ ] Confirm status refresh paths do not leave stale footer state behind after model changes or shutdown
 - [ ] Re-check hook responsibilities after controller extraction so startup, switch, and refresh logic stay narrow
@@ -311,7 +310,7 @@ Goal: confirm runtime behavior stays correct as the command model and controller
 2. ~~Add subcommand and account autocomplete.~~ Done.
 3. ~~Make the main UI the zero-argument path.~~ Done.
 4. ~~Make account selection fully actionable and remove no-op status selection.~~ Done.
-5. ~~Move footer settings under the command family.~~ Done. Immediate persistence still pending.
+5. ~~Move footer settings under the command family.~~ Done. Immediate persistence and normalized reload done.
 6. ~~Add `verify`, `path`, `reset`, and `help`.~~ Done.
 7. ~~Document the behavior contract in README.~~ Done.
 8. ~~Introduce the broader MultiCodex controller.~~ Done.

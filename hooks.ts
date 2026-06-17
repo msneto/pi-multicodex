@@ -29,3 +29,11 @@ export function handleNewSessionSwitch(
 ): void {
 	startSessionIfNeeded(controller, ctx, warningHandler);
 }
+
+export function handleSessionTree(
+	controller: MultiCodexController,
+	ctx: ExtensionContext,
+	warningHandler?: WarningHandler,
+): void {
+	startSessionIfNeeded(controller, ctx, warningHandler);
+}
