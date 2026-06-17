@@ -16,7 +16,7 @@ import {
 import type { AccountManager } from "./account-manager";
 import { isQuotaErrorMessage } from "./quota";
 
-const MAX_ROTATION_RETRIES = 5;
+const DEFAULT_MAX_ROTATION_RETRIES = 5;
 
 type ApiProviderRef = {
 	streamSimple: (
@@ -40,8 +40,11 @@ export function createStreamWrapper(
 		(async () => {
 			try {
 				await accountManager.waitUntilReady();
+				const maxRotationRetries =
+					accountManager.getRotationPreferences().preStreamRetryLimit ??
+					DEFAULT_MAX_ROTATION_RETRIES;
 				const excludedEmails = new Set<string>();
-				for (let attempt = 0; attempt <= MAX_ROTATION_RETRIES; attempt++) {
+				for (let attempt = 0; attempt <= maxRotationRetries; attempt++) {
 					const now = Date.now();
 					const manual = accountManager.getAvailableManualAccount({
 						excludeEmails: excludedEmails,
@@ -73,7 +76,7 @@ export function createStreamWrapper(
 							accountManager.clearManualAccount();
 						}
 						excludedEmails.add(account.email);
-						if (attempt < MAX_ROTATION_RETRIES) {
+						if (attempt < maxRotationRetries) {
 							continue;
 						}
 						throw error;
@@ -110,7 +113,7 @@ export function createStreamWrapper(
 							const msg = event.error.errorMessage || "";
 							const isQuota = isQuotaErrorMessage(msg);
 
-							if (isQuota && !forwardedAny && attempt < MAX_ROTATION_RETRIES) {
+							if (isQuota && !forwardedAny && attempt < maxRotationRetries) {
 								await accountManager.handleQuotaExceeded(account, {
 									signal: options?.signal,
 								});

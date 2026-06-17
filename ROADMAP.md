@@ -210,20 +210,20 @@ Goal: make account rotation behavior explicit, configurable, and inspectable.
 
 ### Rotation configuration work
 
-- [ ] Replace hard-coded rotation criteria with persisted configuration
-- [ ] Add a rotation settings model with normalized load and save behavior
-- [ ] Add a `/multicodex rotation` panel
-- [ ] Persist rotation criteria in settings and apply them to account selection
-- [ ] Expose the current rotation policy in `/multicodex show`
-- [ ] Expose a short rotation-health summary in `/multicodex verify` where practical
+- [x] Replace hard-coded rotation criteria with persisted configuration
+- [x] Add a rotation settings model with normalized load and save behavior
+- [x] Add a `/multicodex rotation` panel
+- [x] Persist rotation criteria in settings and apply them to account selection
+- [x] Expose the current rotation policy in `/multicodex show`
+- [x] Expose a short rotation-health summary in `/multicodex verify` where practical
 
 ### Candidate settings to support
 
-- [ ] prefer untouched accounts
-- [ ] prefer earliest weekly reset when multiple accounts are available
-- [ ] configurable fallback cooldown when reset time is unknown
-- [ ] configurable retry count for pre-stream quota rotation
-- [ ] explicit enable or disable toggles for selection heuristics that are currently implicit
+- [x] prefer untouched accounts
+- [x] prefer earliest weekly reset when multiple accounts are available
+- [x] configurable fallback cooldown when reset time is unknown
+- [x] configurable retry count for pre-stream quota rotation
+- [x] explicit enable or disable toggles for selection heuristics that are currently implicit
 
 ### Rotation acceptance criteria
 
@@ -315,7 +315,7 @@ Goal: confirm runtime behavior stays correct as the command model and controller
 6. ~~Add `verify`, `path`, `reset`, and `help`.~~ Done.
 7. ~~Document the behavior contract in README.~~ Done.
 8. Introduce the broader MultiCodex controller.
-9. Add configurable rotation settings.
+9. ~~Add configurable rotation settings.~~ Done.
 10. Review state restoration and lifecycle handling after the controller migration.
 
 ## Release discipline

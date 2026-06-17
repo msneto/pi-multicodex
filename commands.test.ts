@@ -20,6 +20,7 @@ function createStatusControllerMock() {
 			showReset: true,
 			order: "account-first",
 		})),
+		getRotationSummaryLines: vi.fn(() => ["prefer untouched: on"]),
 	} as unknown as MultiCodexController;
 }
 

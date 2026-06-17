@@ -5,8 +5,17 @@ import type {
 	ExtensionCommandContext,
 	ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
+import { getSettingsListTheme } from "@earendil-works/pi-coding-agent";
+import {
+	Container,
+	type SettingItem,
+	SettingsList,
+	Text,
+} from "@earendil-works/pi-tui";
 import { getAgentSettingsPath } from "pi-provider-utils/agent-paths";
 import type { AccountManager } from "./account-manager";
+import type { RotationSettings } from "./rotation-settings";
+import { loadRotationSettings } from "./rotation-settings";
 import { createUsageStatusController, type FooterPreferences } from "./status";
 import { STORAGE_FILE } from "./storage";
 
@@ -37,6 +46,11 @@ export interface MultiCodexController {
 	startAutoRefresh(): void;
 	stopAutoRefresh(ctx?: ExtensionContext): void;
 	getPreferences(): FooterPreferences;
+	getRotationPreferences(): import("./rotation-settings").RotationSettings;
+	loadRotationPreferences(): Promise<void>;
+	setRotationPreferences(
+		preferences: import("./rotation-settings").RotationSettings,
+	): void;
 	getConfigPaths(): { storage: string; settings: string };
 	getRotationSummaryLines(): string[];
 	getVerifySummary(): Promise<VerifySummary>;
@@ -91,6 +105,75 @@ function formatFooterSummary(preferences: FooterPreferences): string {
 	return `footer: usageMode=${preferences.usageMode} resetWindow=${preferences.resetWindow} showAccount=${preferences.showAccount ? "on" : "off"} showReset=${preferences.showReset ? "on" : "off"} order=${preferences.order}`;
 }
 
+function getBooleanLabel(value: boolean): string {
+	return value ? "on" : "off";
+}
+
+function getCooldownLabel(
+	value: RotationSettings["unknownResetCooldown"],
+): string {
+	return value;
+}
+
+function createRotationSettingItems(settings: RotationSettings): SettingItem[] {
+	return [
+		{
+			id: "preferUntouched",
+			label: "Prefer untouched",
+			description: "Keep untouched accounts ahead of used accounts",
+			currentValue: getBooleanLabel(settings.preferUntouched),
+			values: ["on", "off"],
+		},
+		{
+			id: "preferWeeklyReset",
+			label: "Prefer earliest reset",
+			description:
+				"Choose accounts that reset sooner when several are available",
+			currentValue: getBooleanLabel(settings.preferWeeklyReset),
+			values: ["on", "off"],
+		},
+		{
+			id: "unknownResetCooldown",
+			label: "Unknown reset fallback",
+			description: "Fallback cooldown when reset time cannot be derived",
+			currentValue: getCooldownLabel(settings.unknownResetCooldown),
+			values: ["15m", "1h", "6h"],
+		},
+		{
+			id: "preStreamRetryLimit",
+			label: "Pre-stream retries",
+			description: "Retry count before quota failure surfaces",
+			currentValue: String(settings.preStreamRetryLimit),
+			values: Array.from({ length: 11 }, (_, index) => String(index)),
+		},
+	];
+}
+
+function applyRotationSettingChange(
+	settings: RotationSettings,
+	id: string,
+	newValue: string,
+): RotationSettings {
+	if (id === "preferUntouched") {
+		return { ...settings, preferUntouched: newValue === "on" };
+	}
+	if (id === "preferWeeklyReset") {
+		return { ...settings, preferWeeklyReset: newValue === "on" };
+	}
+	if (
+		id === "unknownResetCooldown" &&
+		(newValue === "15m" || newValue === "1h" || newValue === "6h")
+	) {
+		return { ...settings, unknownResetCooldown: newValue };
+	}
+	if (id === "preStreamRetryLimit") {
+		const parsed = Number(newValue);
+		if (Number.isInteger(parsed) && parsed >= 0 && parsed <= 10) {
+			return { ...settings, preStreamRetryLimit: parsed };
+		}
+	}
+	return settings;
+}
 export function createMultiCodexController(
 	accountManager: AccountManager,
 ): MultiCodexController {
@@ -102,12 +185,7 @@ export function createMultiCodexController(
 	}
 
 	function getRotationSummaryLines(): string[] {
-		return [
-			"Current policy: manual account first, then untouched accounts, then earliest weekly reset, then random fallback.",
-			"If token validation fails before a request starts, MultiCodex skips that account and retries another one.",
-			"If a request hits quota or rate limit before any output streams, MultiCodex marks the account on cooldown and retries.",
-			"If pi auth is active, it participates in rotation as an ephemeral account without being persisted.",
-		];
+		return accountManager.getRotationSummaryLines();
 	}
 
 	async function getVerifySummary(): Promise<VerifySummary> {
@@ -183,6 +261,10 @@ export function createMultiCodexController(
 		await statusController.loadPreferences(ctx as ExtensionContext | undefined);
 	}
 
+	async function loadRotationPreferences(): Promise<void> {
+		accountManager.loadRotationPreferences(loadRotationSettings());
+	}
+
 	async function startSession(
 		ctx: ExtensionContext,
 		warningHandler?: WarningHandler,
@@ -191,6 +273,7 @@ export function createMultiCodexController(
 		statusController.startAutoRefresh();
 		void restoreSessionState(warningHandler).catch(() => {});
 		await loadFooterPreferences(ctx);
+		await loadRotationPreferences();
 		await statusController.refreshFor(ctx);
 	}
 
@@ -248,28 +331,69 @@ export function createMultiCodexController(
 	async function runRotationCommand(
 		ctx: ExtensionCommandContext,
 	): Promise<void> {
-		const lines = [
-			"Current policy: manual account first, then untouched accounts, then earliest weekly reset, then random fallback.",
-			"If token validation fails before a request starts, MultiCodex skips that account and retries another one.",
-			"If a request hits quota or rate limit before any output streams, MultiCodex marks the account on cooldown and retries.",
-			"If pi auth is active, it participates in rotation as an ephemeral account without being persisted.",
-		];
+		await loadRotationPreferences();
+		let draft = accountManager.getRotationPreferences();
+		const renderPreviewLabel = (): string =>
+			`Preview: ${accountManager.getRotationSummaryLines().join(" • ")}`;
 
 		if (!ctx.hasUI) {
-			ctx.ui.notify(lines.join(" "), "info");
+			ctx.ui.notify(renderPreviewLabel(), "info");
 			return;
 		}
 
-		await ctx.ui.select("MultiCodex Rotation", lines);
+		await ctx.ui.custom((_tui, theme, _kb, done) => {
+			const container = new Container();
+			container.addChild(
+				new Text(theme.fg("accent", theme.bold("MultiCodex Rotation")), 1, 0),
+			);
+			container.addChild(
+				new Text(
+					theme.fg(
+						"dim",
+						"Tune rotation heuristics, cooldown fallback, and pre-stream retries.",
+					),
+					1,
+					0,
+				),
+			);
+			const previewText = new Text(theme.fg("dim", renderPreviewLabel()), 1, 0);
+			container.addChild(previewText);
+
+			const settingsList = new SettingsList(
+				createRotationSettingItems(draft),
+				8,
+				getSettingsListTheme(),
+				(id: string, newValue: string) => {
+					draft = applyRotationSettingChange(draft, id, newValue);
+					accountManager.setRotationPreferences(draft);
+					settingsList.updateValue(id, newValue);
+					previewText.setText(theme.fg("dim", renderPreviewLabel()));
+					container.invalidate();
+				},
+				() => done(undefined),
+				{ enableSearch: true },
+			);
+			container.addChild(settingsList);
+
+			return {
+				render: (width: number) => container.render(width),
+				invalidate: () => container.invalidate(),
+				handleInput: (data: string) => settingsList.handleInput(data),
+			};
+		});
 	}
 
 	async function runVerifyCommand(ctx: ExtensionCommandContext): Promise<void> {
 		const summary = await getVerifySummary();
 		await loadFooterPreferences(ctx);
+		await loadRotationPreferences();
+		const rotationSummary = accountManager
+			.getRotationSummaryLines()
+			.join(" | ");
 
 		if (!ctx.hasUI) {
 			ctx.ui.notify(
-				`verify: ${summary.ok ? "PASS" : "WARN"} storage=${summary.storageWritable ? "ok" : "fail"} settings=${summary.settingsWritable ? "ok" : "fail"} accounts=${summary.accounts} active=${summary.activeAccount} piAuth=${summary.hasPiAuth ? "loaded" : "none"} needsReauth=${summary.needsReauth}`,
+				`verify: ${summary.ok ? "PASS" : "WARN"} storage=${summary.storageWritable ? "ok" : "fail"} settings=${summary.settingsWritable ? "ok" : "fail"} accounts=${summary.accounts} active=${summary.activeAccount} piAuth=${summary.hasPiAuth ? "loaded" : "none"} needsReauth=${summary.needsReauth} rotation=${rotationSummary}`,
 				summary.ok ? "info" : "warning",
 			);
 			return;
@@ -282,6 +406,7 @@ export function createMultiCodexController(
 			`active account: ${summary.activeAccount}`,
 			`pi auth (ephemeral): ${summary.hasPiAuth ? "loaded" : "none"}`,
 			`accounts needing re-authentication: ${summary.needsReauth}`,
+			`rotation: ${rotationSummary}`,
 		]);
 	}
 
@@ -340,6 +465,10 @@ export function createMultiCodexController(
 		stopAutoRefresh: (ctx?: ExtensionContext) =>
 			statusController.stopAutoRefresh(ctx),
 		getPreferences: () => statusController.getPreferences(),
+		getRotationPreferences: () => accountManager.getRotationPreferences(),
+		loadRotationPreferences,
+		setRotationPreferences: (preferences: RotationSettings) =>
+			accountManager.setRotationPreferences(preferences),
 		getConfigPaths,
 		getRotationSummaryLines,
 		getVerifySummary,

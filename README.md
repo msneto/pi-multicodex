@@ -44,7 +44,7 @@ Everything lives under one command: `/multicodex`.
 | `/multicodex refresh [identifier\|all]` | Refresh token validity and usage data for one account or all accounts |
 | `/multicodex reauth [identifier]` | Re-authenticate one account explicitly |
 | `/multicodex footer` | Configure the usage footer display |
-| `/multicodex rotation` | Show the current rotation policy |
+| `/multicodex rotation` | Inspect and edit rotation settings |
 | `/multicodex verify` | Check storage, settings, auth import, and reauth health |
 | `/multicodex path` | Print storage and settings file locations |
 | `/multicodex reset [manual\|quota\|all]` | Clear manual override, quota cooldowns, or both |
@@ -86,6 +86,7 @@ You can customize which fields appear and their ordering with `/multicodex foote
 - **Auth import.** When pi has stored Codex OAuth credentials, MultiCodex imports them automatically and merges duplicate credentials into existing managed accounts when possible.
 - **Token refresh.** OAuth tokens are refreshed before expiry so requests do not fail due to stale credentials. You can also force a health refresh with `/multicodex refresh` or re-authenticate explicitly with `/multicodex reauth`.
 - **Usage tracking.** Usage data is fetched from the Codex API and cached for 5 minutes per account. The footer renders cached data immediately and refreshes in the background.
+- **Rotation settings.** The rotation panel persists untouched-account preference, earliest-reset preference, unknown-reset fallback cooldown, and pre-stream retry count in `settings.json`.
 - **Quota cooldown.** When an account is exhausted, it stays on cooldown until its next known reset time (or 1 hour if the reset time is unknown).
 - **Shared utility seams.** Provider mirroring, stream primitives, and `~/.pi/agent/*` path helpers are shared with `pi-credential-vault` through `@victor-software-house/pi-provider-utils`. MultiCodex still owns account storage, token policy, footer behavior, and command UX.
 

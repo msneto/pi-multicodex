@@ -4,6 +4,14 @@ import {
 } from "@earendil-works/pi-ai/oauth";
 import { normalizeUnknownError } from "pi-provider-utils/streams";
 import { loadImportedOpenAICodexAuth } from "./auth";
+import {
+	DEFAULT_ROTATION_SETTINGS,
+	formatRotationSummaryLines,
+	loadRotationSettings,
+	persistRotationSettings,
+	type RotationSettings,
+	rotationCooldownToMs,
+} from "./rotation-settings";
 import { isAccountAvailable, pickBestAccount } from "./selection";
 import {
 	type Account,
@@ -16,7 +24,6 @@ import { fetchCodexUsage } from "./usage-client";
 
 const USAGE_CACHE_TTL_MS = 5 * 60 * 1000;
 const USAGE_REQUEST_TIMEOUT_MS = 10 * 1000;
-const QUOTA_COOLDOWN_MS = 60 * 60 * 1000;
 
 type WarningHandler = (message: string) => void;
 type StateChangeHandler = () => void;
@@ -30,11 +37,13 @@ export class AccountManager {
 	private manualEmail?: string;
 	private stateChangeHandlers = new Set<StateChangeHandler>();
 	private warnedAuthFailureEmails = new Set<string>();
+	private rotationPreferences: RotationSettings = DEFAULT_ROTATION_SETTINGS;
 	private readyPromise: Promise<void> = Promise.resolve();
 	private readyResolve?: () => void;
 
 	constructor() {
 		this.data = loadStorage();
+		this.rotationPreferences = loadRotationSettings();
 	}
 
 	/**
@@ -203,6 +212,24 @@ export class AccountManager {
 
 	hasManualAccount(): boolean {
 		return Boolean(this.manualEmail);
+	}
+
+	getRotationPreferences(): RotationSettings {
+		return this.rotationPreferences;
+	}
+
+	getRotationSummaryLines(): string[] {
+		return formatRotationSummaryLines(this.rotationPreferences);
+	}
+
+	loadRotationPreferences(preferences: RotationSettings): void {
+		this.rotationPreferences = preferences;
+	}
+
+	setRotationPreferences(preferences: RotationSettings): void {
+		this.rotationPreferences = preferences;
+		persistRotationSettings(preferences);
+		this.notifyStateChanged();
 	}
 
 	setActiveAccount(email: string): void {
@@ -405,6 +432,7 @@ export class AccountManager {
 		const selected = pickBestAccount(accounts, this.usageCache, {
 			excludeEmails: options?.excludeEmails,
 			now,
+			rotation: this.rotationPreferences,
 		});
 		if (selected) {
 			if (this.isPiAuthAccount(selected)) {
@@ -429,7 +457,8 @@ export class AccountManager {
 		});
 		const now = Date.now();
 		const resetAt = getNextResetAt(usage);
-		const fallback = now + QUOTA_COOLDOWN_MS;
+		const fallback =
+			now + rotationCooldownToMs(this.rotationPreferences.unknownResetCooldown);
 		const until = resetAt && resetAt > now ? resetAt : fallback;
 		this.markExhausted(account.email, until);
 	}

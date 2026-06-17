@@ -1,3 +1,9 @@
+## Unreleased
+
+### Features
+
+* add configurable rotation settings, rotation panel, and rotation-health summaries
+
 ## [2.3.1](https://github.com/victor-software-house/pi-multicodex/compare/v2.3.0...v2.3.1) (2026-03-30)
 
 

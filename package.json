@@ -39,6 +39,7 @@
 		"hooks.ts",
 		"index.ts",
 		"multicodex-controller.ts",
+		"rotation-settings.ts",
 		"provider.ts",
 		"quota.ts",
 		"selection.ts",

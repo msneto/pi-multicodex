@@ -5,6 +5,7 @@ import {
 	type AccountManager,
 	buildMulticodexProviderConfig,
 	createStreamWrapper,
+	DEFAULT_ROTATION_SETTINGS,
 	getNextResetAt,
 	getOpenAICodexMirror,
 	getWeeklyResetAt,
@@ -227,6 +228,38 @@ describe("pickBestAccount", () => {
 		expect(selected?.email).toBe("sh01");
 	});
 
+	it("prefers earliest weekly reset when setting is enabled", () => {
+		const accounts = [makeAccount("a"), makeAccount("b")];
+		const usage = new Map([
+			[
+				"a",
+				{
+					primary: { usedPercent: 90, resetAt: 5000 },
+					secondary: { usedPercent: 80, resetAt: 6000 },
+					fetchedAt: 0,
+				},
+			],
+			[
+				"b",
+				{
+					primary: { usedPercent: 5, resetAt: 5000 },
+					secondary: { usedPercent: 10, resetAt: 9000 },
+					fetchedAt: 0,
+				},
+			],
+		]);
+
+		const selected = pickBestAccount(accounts, usage, {
+			now: 0,
+			rotation: {
+				...DEFAULT_ROTATION_SETTINGS,
+				preferWeeklyReset: true,
+				preferUntouched: false,
+			},
+		});
+		expect(selected?.email).toBe("a");
+	});
+
 	it("falls back to available account when usage is unknown", () => {
 		const accounts = [makeAccount("a"), makeAccount("b")];
 		const selected = pickBestAccount(accounts, new Map(), { now: 0 });
@@ -326,6 +359,7 @@ describe("manual account selection", () => {
 			},
 			ensureValidToken: async () => "manual-token",
 			handleQuotaExceeded: async () => {},
+			getRotationPreferences: () => DEFAULT_ROTATION_SETTINGS,
 		} as unknown as AccountManager;
 
 		const baseProvider = {
@@ -378,6 +412,7 @@ describe("manual account selection", () => {
 			activateBestAccount: async () => auto,
 			ensureValidToken: async () => "auto-token",
 			handleQuotaExceeded: async () => {},
+			getRotationPreferences: () => DEFAULT_ROTATION_SETTINGS,
 		} as unknown as AccountManager;
 
 		const baseProvider = {
@@ -436,6 +471,7 @@ describe("manual account selection", () => {
 			},
 			ensureValidToken: async (account: Account) => `${account.email}-token`,
 			handleQuotaExceeded: async () => {},
+			getRotationPreferences: () => DEFAULT_ROTATION_SETTINGS,
 		} as unknown as AccountManager;
 
 		const baseProvider = {
@@ -506,6 +542,7 @@ describe("manual account selection", () => {
 				return "healthy-token";
 			},
 			notifyRotationSkipForAuthFailure,
+			getRotationPreferences: () => DEFAULT_ROTATION_SETTINGS,
 			handleQuotaExceeded: async () => {},
 		} as unknown as AccountManager;
 

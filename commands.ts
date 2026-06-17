@@ -665,10 +665,11 @@ export async function runAccountsSubcommand(
 	}
 
 	if (!ctx.hasUI) {
+		const rotationLine = `rotation: ${statusController.getRotationSummaryLines().join(", ")}`;
 		const lines = accounts.map((account) =>
 			formatAccountStatusLine(accountManager, account.email),
 		);
-		ctx.ui.notify(lines.join("\n"), "info");
+		ctx.ui.notify([rotationLine, ...lines].join("\n"), "info");
 		return;
 	}
 
