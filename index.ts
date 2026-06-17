@@ -1,6 +1,13 @@
 export { AccountManager } from "./account-manager";
 export { parseImportedOpenAICodexAuth } from "./auth";
 export { default } from "./extension";
+export type {
+	MultiCodexController,
+	ResetSummary,
+	ResetTarget,
+	VerifySummary,
+} from "./multicodex-controller";
+export { createMultiCodexController } from "./multicodex-controller";
 export {
 	buildMulticodexProviderConfig,
 	getOpenAICodexMirror,
@@ -12,13 +19,6 @@ export {
 	isAccountAvailable,
 	pickBestAccount,
 } from "./selection";
-export { createMultiCodexController } from "./multicodex-controller";
-export type {
-	MultiCodexController,
-	ResetSummary,
-	ResetTarget,
-	VerifySummary,
-} from "./multicodex-controller";
 export {
 	createUsageStatusController,
 	formatActiveAccountStatus,

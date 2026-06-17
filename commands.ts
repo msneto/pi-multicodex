@@ -17,7 +17,7 @@ import { normalizeUnknownError } from "pi-provider-utils/streams";
 import type { AccountManager } from "./account-manager";
 import { openLoginInBrowser } from "./browser";
 import type { MultiCodexController } from "./multicodex-controller";
-import { type Account } from "./storage";
+import type { Account } from "./storage";
 import { formatResetAt, isUsageUntouched } from "./usage";
 
 const NO_ACCOUNTS_MESSAGE =
@@ -684,7 +684,6 @@ export async function runShowSubcommand(
 	await runAccountsSubcommand(pi, ctx, accountManager, statusController, "");
 }
 
-     
 async function chooseResetTarget(
 	ctx: ExtensionCommandContext,
 	argument: string,
@@ -808,7 +807,7 @@ async function runSubcommand(
 	rest: string,
 	pi: ExtensionAPI,
 	ctx: ExtensionCommandContext,
-	accountManager: AccountManager,
+	_accountManager: AccountManager,
 	statusController: MultiCodexController,
 ): Promise<void> {
 	if (subcommand === "accounts" || subcommand === "use") {

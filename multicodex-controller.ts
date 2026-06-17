@@ -7,10 +7,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { getAgentSettingsPath } from "pi-provider-utils/agent-paths";
 import type { AccountManager } from "./account-manager";
-import {
-	type FooterPreferences,
-	createUsageStatusController,
-} from "./status";
+import { createUsageStatusController, type FooterPreferences } from "./status";
 import { STORAGE_FILE } from "./storage";
 
 type WarningHandler = (message: string) => void;
@@ -44,18 +41,36 @@ export interface MultiCodexController {
 	getRotationSummaryLines(): string[];
 	getVerifySummary(): Promise<VerifySummary>;
 	resetState(target: ResetTarget): ResetSummary;
-	runAccountsCommand(pi: ExtensionAPI, ctx: ExtensionCommandContext, rest: string): Promise<void>;
+	runAccountsCommand(
+		pi: ExtensionAPI,
+		ctx: ExtensionCommandContext,
+		rest: string,
+	): Promise<void>;
 	runShowCommand(pi: ExtensionAPI, ctx: ExtensionCommandContext): Promise<void>;
-	runRefreshCommand(pi: ExtensionAPI, ctx: ExtensionCommandContext, rest: string): Promise<void>;
-	runReauthCommand(pi: ExtensionAPI, ctx: ExtensionCommandContext, rest: string): Promise<void>;
+	runRefreshCommand(
+		pi: ExtensionAPI,
+		ctx: ExtensionCommandContext,
+		rest: string,
+	): Promise<void>;
+	runReauthCommand(
+		pi: ExtensionAPI,
+		ctx: ExtensionCommandContext,
+		rest: string,
+	): Promise<void>;
 	runFooterCommand(ctx: ExtensionCommandContext): Promise<void>;
 	runRotationCommand(ctx: ExtensionCommandContext): Promise<void>;
 	runVerifyCommand(ctx: ExtensionCommandContext): Promise<void>;
 	runPathCommand(ctx: ExtensionCommandContext): Promise<void>;
-	runResetCommand(ctx: ExtensionCommandContext, target: ResetTarget): Promise<void>;
+	runResetCommand(
+		ctx: ExtensionCommandContext,
+		target: ResetTarget,
+	): Promise<void>;
 	refreshStatus(ctx: ExtensionContext): Promise<void>;
 	openFooterPanel(ctx: ExtensionCommandContext): Promise<void>;
-	startSession(ctx: ExtensionContext, warningHandler?: WarningHandler): Promise<void>;
+	startSession(
+		ctx: ExtensionContext,
+		warningHandler?: WarningHandler,
+	): Promise<void>;
 	stopSession(ctx?: ExtensionContext): void;
 }
 
@@ -130,7 +145,6 @@ export function createMultiCodexController(
 		};
 	}
 
-
 	async function restoreSessionState(
 		warningHandler?: WarningHandler,
 	): Promise<void> {
@@ -180,12 +194,9 @@ export function createMultiCodexController(
 		await statusController.refreshFor(ctx);
 	}
 
-
 	function stopSession(ctx?: ExtensionContext): void {
 		statusController.stopAutoRefresh(ctx);
 	}
-
-
 
 	async function runAccountsCommand(
 		pi: ExtensionAPI,
@@ -195,7 +206,10 @@ export function createMultiCodexController(
 		const { runAccountsSubcommand } = await import("./commands");
 		await runAccountsSubcommand(pi, ctx, accountManager, controller, rest);
 	}
-	async function runShowCommand(pi: ExtensionAPI, ctx: ExtensionCommandContext): Promise<void> {
+	async function runShowCommand(
+		pi: ExtensionAPI,
+		ctx: ExtensionCommandContext,
+	): Promise<void> {
 		const { runShowSubcommand } = await import("./commands");
 		await runShowSubcommand(pi, ctx, accountManager, controller);
 	}
@@ -221,14 +235,19 @@ export function createMultiCodexController(
 	async function runFooterCommand(ctx: ExtensionCommandContext): Promise<void> {
 		if (!ctx.hasUI) {
 			await loadFooterPreferences(ctx);
-			ctx.ui.notify(formatFooterSummary(statusController.getPreferences()), "info");
+			ctx.ui.notify(
+				formatFooterSummary(statusController.getPreferences()),
+				"info",
+			);
 			return;
 		}
 
 		await statusController.openPreferencesPanel(ctx);
 	}
 
-	async function runRotationCommand(ctx: ExtensionCommandContext): Promise<void> {
+	async function runRotationCommand(
+		ctx: ExtensionCommandContext,
+	): Promise<void> {
 		const lines = [
 			"Current policy: manual account first, then untouched accounts, then earliest weekly reset, then random fallback.",
 			"If token validation fails before a request starts, MultiCodex skips that account and retries another one.",
@@ -269,7 +288,10 @@ export function createMultiCodexController(
 	async function runPathCommand(ctx: ExtensionCommandContext): Promise<void> {
 		const paths = getConfigPaths();
 		if (!ctx.hasUI) {
-			ctx.ui.notify(`paths: storage=${paths.storage} settings=${paths.settings}`, "info");
+			ctx.ui.notify(
+				`paths: storage=${paths.storage} settings=${paths.settings}`,
+				"info",
+			);
 			return;
 		}
 
@@ -315,7 +337,8 @@ export function createMultiCodexController(
 		scheduleModelSelectRefresh: (ctx: ExtensionContext) =>
 			statusController.scheduleModelSelectRefresh(ctx),
 		startAutoRefresh: () => statusController.startAutoRefresh(),
-		stopAutoRefresh: (ctx?: ExtensionContext) => statusController.stopAutoRefresh(ctx),
+		stopAutoRefresh: (ctx?: ExtensionContext) =>
+			statusController.stopAutoRefresh(ctx),
 		getPreferences: () => statusController.getPreferences(),
 		getConfigPaths,
 		getRotationSummaryLines,

@@ -105,7 +105,9 @@ describe("multicodexExtension", () => {
 		turnEnd?.({}, ctx as never);
 		modelSelect?.({}, ctx as never);
 		expect(mocks.controllerRefreshFor).toHaveBeenCalledTimes(1);
-		expect(mocks.controllerScheduleModelSelectRefresh).toHaveBeenCalledWith(ctx);
+		expect(mocks.controllerScheduleModelSelectRefresh).toHaveBeenCalledWith(
+			ctx,
+		);
 
 		sessionShutdown?.({}, ctx as never);
 		expect(mocks.controllerStopSession).toHaveBeenCalledWith(ctx);
