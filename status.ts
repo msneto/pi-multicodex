@@ -503,12 +503,71 @@ export function createUsageStatusController(accountManager: AccountManager) {
 		}
 	}
 
-	async function setPreferences(
+	type PreferenceSaveRequest = {
+		preferences: FooterPreferences;
+		resolve: () => void;
+		reject: (error: unknown) => void;
+		ctx?: ExtensionContext | ExtensionCommandContext;
+	};
+
+	const pendingPreferenceSaves: PreferenceSaveRequest[] = [];
+	let processingPreferenceSaves = false;
+
+	function notifyPreferenceSaveError(
+		ctx: ExtensionContext | ExtensionCommandContext | undefined,
+		error: unknown,
+	): void {
+		ctx?.ui.notify(
+			`Multicodex: failed to save footer settings: ${String(error)}`,
+			"warning",
+		);
+	}
+
+	function processPreferenceSaves(): void {
+		if (processingPreferenceSaves) return;
+		processingPreferenceSaves = true;
+		void (async () => {
+			try {
+				while (pendingPreferenceSaves.length > 0) {
+					const request = pendingPreferenceSaves.shift();
+					if (!request) continue;
+					try {
+						await persistFooterPreferences(request.preferences);
+						request.resolve();
+					} catch (error) {
+						notifyPreferenceSaveError(request.ctx, error);
+						request.reject(error);
+					}
+				}
+			} finally {
+				processingPreferenceSaves = false;
+				if (pendingPreferenceSaves.length > 0) processPreferenceSaves();
+			}
+		})();
+	}
+
+	function savePreferences(
 		nextPreferences: FooterPreferences,
+		ctx?: ExtensionContext | ExtensionCommandContext,
 	): Promise<void> {
 		preferences = nextPreferences;
+		return new Promise<void>((resolve, reject) => {
+			pendingPreferenceSaves.push({
+				preferences: nextPreferences,
+				resolve,
+				reject,
+				ctx,
+			});
+			processPreferenceSaves();
+		});
+	}
+
+	async function setPreferences(
+		nextPreferences: FooterPreferences,
+		ctx?: ExtensionContext | ExtensionCommandContext,
+	): Promise<void> {
 		livePreviewPreferences = undefined;
-		await persistFooterPreferences(preferences);
+		await savePreferences(nextPreferences, ctx);
 	}
 
 	function renderPreviewLabel(
@@ -558,6 +617,7 @@ export function createUsageStatusController(accountManager: AccountManager) {
 					previewText.setText(renderPreviewLabel(ctx, theme, draft));
 					container.invalidate();
 					renderCachedStatus(ctx, draft);
+					void savePreferences(draft, ctx).catch(() => undefined);
 				},
 				() => done(undefined),
 				{ enableSearch: true },
@@ -571,7 +631,7 @@ export function createUsageStatusController(accountManager: AccountManager) {
 			};
 		});
 
-		await setPreferences(draft);
+		await setPreferences(draft, ctx);
 		await refreshFor(ctx);
 	}
 

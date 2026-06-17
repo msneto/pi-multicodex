@@ -181,10 +181,10 @@ Goal: finish the footer experience so it matches the new command model and follo
 ### Remaining work
 
 - [x] Move footer settings access under `/multicodex footer`
-- [ ] Persist footer settings immediately on each change instead of waiting until panel close
+- [x] Persist footer settings immediately on each change instead of waiting until panel close
 - [ ] Re-read normalized settings after save when needed so the UI reflects persisted truth
 - [x] Add a non-UI footer summary path under `/multicodex footer` for non-interactive mode
-- [ ] Keep live preview behavior while switching to immediate persistence
+- [x] Keep live preview behavior while switching to immediate persistence
 
 ### Footer acceptance criteria
 

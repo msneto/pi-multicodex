@@ -76,7 +76,7 @@ When you remove an active account, MultiCodex switches to the next available one
 
 MultiCodex adds a live footer to your session showing the active account, 5-hour and 7-day usage percentages, and reset countdowns. The footer updates after every turn and on account switches.
 
-You can customize which fields appear and their ordering with `/multicodex footer`.
+You can customize which fields appear and their ordering with `/multicodex footer`. Changes save immediately as you edit.
 
 ![MultiCodex footer settings](./assets/multicodex-footer-settings.png)
 
