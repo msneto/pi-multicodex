@@ -21,6 +21,7 @@ import {
 } from "./storage";
 import { type CodexUsageSnapshot, getNextResetAt } from "./usage";
 import { fetchCodexUsage } from "./usage-client";
+import { appendUsageHistorySample } from "./usage-history";
 
 const USAGE_CACHE_TTL_MS = 5 * 60 * 1000;
 const USAGE_REQUEST_TIMEOUT_MS = 10 * 1000;
@@ -381,6 +382,12 @@ export class AccountManager {
 				timeoutMs: USAGE_REQUEST_TIMEOUT_MS,
 			});
 			this.usageCache.set(account.email, usage);
+			appendUsageHistorySample({
+				ts: Date.now(),
+				email: account.email,
+				primary: usage.primary,
+				secondary: usage.secondary,
+			});
 			this.notifyStateChanged();
 			return usage;
 		} catch (error) {

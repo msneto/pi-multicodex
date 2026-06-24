@@ -42,6 +42,8 @@
 		"rotation-settings.ts",
 		"report.ts",
 		"provider.ts",
+		"paths.ts",
+		"usage-history.ts",
 		"quota.ts",
 		"selection.ts",
 		"status.ts",

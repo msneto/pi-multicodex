@@ -1,10 +1,17 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { getAgentSettingsPath } from "pi-provider-utils/agent-paths";
 import { z } from "zod";
+import { LEGACY_SETTINGS_FILE, MULTICODEX_ROTATION_FILE } from "./paths";
+
+const RotationFileSchema = z
+	.object({
+		version: z.number().int().positive(),
+		rotation: z.unknown(),
+	})
+	.strict();
 
 const SETTINGS_KEY = "pi-multicodex";
-const SETTINGS_FILE = getAgentSettingsPath();
+const SETTINGS_FILE = LEGACY_SETTINGS_FILE;
 
 const SelectionStrategySchema = z.enum(["lowest-usage", "stable-weekly"]);
 const RotationCooldownSchema = z.enum(["15m", "1h", "6h"]);
@@ -97,14 +104,6 @@ function readSettingsFile(): Record<string, unknown> {
 	}
 }
 
-function writeSettingsFile(settings: Record<string, unknown>): void {
-	const directory = path.dirname(SETTINGS_FILE);
-	if (!existsSync(directory)) {
-		mkdirSync(directory, { recursive: true });
-	}
-	writeFileSync(SETTINGS_FILE, `${JSON.stringify(settings, null, 2)}\n`);
-}
-
 function getRotationRecord(
 	settings: Record<string, unknown>,
 ): Record<string, unknown> {
@@ -125,22 +124,49 @@ function getRotationRecord(
 	return {};
 }
 
+function readRotationFile(): RotationSettings | undefined {
+	if (!existsSync(MULTICODEX_ROTATION_FILE)) return undefined;
+	try {
+		const raw = JSON.parse(
+			readFileSync(MULTICODEX_ROTATION_FILE, "utf8"),
+		) as unknown;
+		const parsed = RotationFileSchema.safeParse(raw);
+		if (!parsed.success) return undefined;
+		return normalizeRotationSettings(parsed.data.rotation);
+	} catch {
+		return undefined;
+	}
+}
+
+function writeRotationFile(settingsValue: RotationSettings): void {
+	const directory = path.dirname(MULTICODEX_ROTATION_FILE);
+	if (!existsSync(directory)) {
+		mkdirSync(directory, { recursive: true });
+	}
+	writeFileSync(
+		MULTICODEX_ROTATION_FILE,
+		`${JSON.stringify({ version: 1, rotation: settingsValue }, null, 2)}\n`,
+	);
+}
+
 export function loadRotationSettings(): RotationSettings {
+	const current = readRotationFile();
+	if (current) return current;
+
 	const settings = readSettingsFile();
 	const rotation = getRotationRecord(settings);
+	if (Object.keys(rotation).length === 0) {
+		return DEFAULT_ROTATION_SETTINGS;
+	}
 	const normalized = normalizeRotationSettings(rotation);
 	const data = RotationSettingsSchema.safeParse(normalized);
-	return data.success ? data.data : DEFAULT_ROTATION_SETTINGS;
+	const result = data.success ? data.data : DEFAULT_ROTATION_SETTINGS;
+	writeRotationFile(result);
+	return result;
 }
 
 export function persistRotationSettings(settingsValue: RotationSettings): void {
-	const settings = readSettingsFile();
-	const entry = asObject(settings[SETTINGS_KEY]) ?? {};
-	settings[SETTINGS_KEY] = {
-		...entry,
-		rotation: settingsValue,
-	};
-	writeSettingsFile(settings);
+	writeRotationFile(settingsValue);
 }
 
 export function rotationCooldownToMs(value: RotationCooldown): number {

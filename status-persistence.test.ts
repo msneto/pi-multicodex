@@ -8,6 +8,8 @@ let settings = {
 		showAccount: true,
 		showReset: true,
 		order: "account-first",
+		separator: "/",
+		accountLabelMaxChars: 14,
 	},
 };
 
@@ -131,6 +133,8 @@ describe("footer settings persistence", () => {
 				showAccount: true,
 				showReset: true,
 				order: "account-first",
+				separator: "/",
+				accountLabelMaxChars: 14,
 			},
 		};
 		const controller = createUsageStatusController({

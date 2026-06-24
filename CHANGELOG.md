@@ -3,6 +3,7 @@
 ### Features
 
 * add configurable rotation settings, rotation panel, quota report, and rotation-health summaries
+* compact usage footer layout with separator and account-label truncation controls
 
 ## [2.3.1](https://github.com/victor-software-house/pi-multicodex/compare/v2.3.0...v2.3.1) (2026-03-30)
 

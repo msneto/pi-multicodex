@@ -14,6 +14,10 @@ import {
 } from "@earendil-works/pi-tui";
 import { getAgentSettingsPath } from "pi-provider-utils/agent-paths";
 import type { AccountManager } from "./account-manager";
+import {
+	MULTICODEX_ROTATION_FILE,
+	MULTICODEX_USAGE_HISTORY_FILE,
+} from "./paths";
 import { formatAccountReportLines } from "./report";
 import type { RotationSettings } from "./rotation-settings";
 import { loadRotationSettings } from "./rotation-settings";
@@ -26,6 +30,7 @@ export type ResetTarget = "manual" | "quota" | "all";
 export interface VerifySummary {
 	storageWritable: boolean;
 	settingsWritable: boolean;
+	historyWritable: boolean;
 	accounts: number;
 	activeAccount: string;
 	hasPiAuth: boolean;
@@ -55,7 +60,12 @@ export interface MultiCodexController {
 	setRotationPreferences(
 		preferences: import("./rotation-settings").RotationSettings,
 	): void;
-	getConfigPaths(): { storage: string; settings: string };
+	getConfigPaths(): {
+		storage: string;
+		settings: string;
+		rotation: string;
+		history: string;
+	};
 	getRotationSummaryLines(): string[];
 	getVerifySummary(): Promise<VerifySummary>;
 	resetState(target: ResetTarget): ResetSummary;
@@ -107,7 +117,7 @@ async function isWritableDirectoryFor(filePath: string): Promise<boolean> {
 }
 
 function formatFooterSummary(preferences: FooterPreferences): string {
-	return `footer: usageMode=${preferences.usageMode} resetWindow=${preferences.resetWindow} showAccount=${preferences.showAccount ? "on" : "off"} showReset=${preferences.showReset ? "on" : "off"} order=${preferences.order}`;
+	return `footer: separator=${preferences.separator} accountLabelMaxChars=${preferences.accountLabelMaxChars} usageMode=${preferences.usageMode} resetWindow=${preferences.resetWindow} showAccount=${preferences.showAccount ? "on" : "off"} showReset=${preferences.showReset ? "on" : "off"} order=${preferences.order}`;
 }
 
 function getBooleanLabel(value: boolean): string {
@@ -187,8 +197,18 @@ export function createMultiCodexController(
 	const statusController = createUsageStatusController(accountManager);
 	let controller: MultiCodexController;
 
-	function getConfigPaths(): { storage: string; settings: string } {
-		return { storage: STORAGE_FILE, settings: SETTINGS_FILE };
+	function getConfigPaths(): {
+		storage: string;
+		settings: string;
+		rotation: string;
+		history: string;
+	} {
+		return {
+			storage: STORAGE_FILE,
+			settings: SETTINGS_FILE,
+			rotation: MULTICODEX_ROTATION_FILE,
+			history: MULTICODEX_USAGE_HISTORY_FILE,
+		};
 	}
 
 	function getRotationSummaryLines(): string[] {
@@ -198,6 +218,9 @@ export function createMultiCodexController(
 	async function getVerifySummary(): Promise<VerifySummary> {
 		const storageWritable = await isWritableDirectoryFor(STORAGE_FILE);
 		const settingsWritable = await isWritableDirectoryFor(SETTINGS_FILE);
+		const historyWritable = await isWritableDirectoryFor(
+			MULTICODEX_USAGE_HISTORY_FILE,
+		);
 		const hasPiAuth = accountManager
 			.getAccounts()
 			.some((account) => accountManager.isPiAuthAccount(account));
@@ -211,7 +234,12 @@ export function createMultiCodexController(
 			activeAccount,
 			hasPiAuth,
 			needsReauth,
-			ok: storageWritable && settingsWritable && needsReauth === 0,
+			historyWritable,
+			ok:
+				storageWritable &&
+				settingsWritable &&
+				historyWritable &&
+				needsReauth === 0,
 		};
 	}
 
@@ -402,7 +430,7 @@ export function createMultiCodexController(
 
 		if (!ctx.hasUI) {
 			ctx.ui.notify(
-				`verify: ${summary.ok ? "PASS" : "WARN"} storage=${summary.storageWritable ? "ok" : "fail"} settings=${summary.settingsWritable ? "ok" : "fail"} accounts=${summary.accounts} active=${summary.activeAccount} piAuth=${summary.hasPiAuth ? "loaded" : "none"} needsReauth=${summary.needsReauth} rotation=${rotationSummary}`,
+				`verify: ${summary.ok ? "PASS" : "WARN"} storage=${summary.storageWritable ? "ok" : "fail"} settings=${summary.settingsWritable ? "ok" : "fail"} history=${summary.historyWritable ? "ok" : "fail"} accounts=${summary.accounts} active=${summary.activeAccount} piAuth=${summary.hasPiAuth ? "loaded" : "none"} needsReauth=${summary.needsReauth} rotation=${rotationSummary}`,
 				summary.ok ? "info" : "warning",
 			);
 			return;
@@ -411,6 +439,7 @@ export function createMultiCodexController(
 		await ctx.ui.select(`MultiCodex Verify (${summary.ok ? "PASS" : "WARN"})`, [
 			`storage directory writable: ${summary.storageWritable ? "yes" : "no"}`,
 			`settings directory writable: ${summary.settingsWritable ? "yes" : "no"}`,
+			`history directory writable: ${summary.historyWritable ? "yes" : "no"}`,
 			`managed accounts: ${summary.accounts}`,
 			`active account: ${summary.activeAccount}`,
 			`pi auth (ephemeral): ${summary.hasPiAuth ? "loaded" : "none"}`,
@@ -423,7 +452,7 @@ export function createMultiCodexController(
 		const paths = controller.getConfigPaths();
 		if (!ctx.hasUI) {
 			ctx.ui.notify(
-				`paths: storage=${paths.storage} settings=${paths.settings}`,
+				`paths: storage=${paths.storage} settings=${paths.settings} rotation=${paths.rotation} history=${paths.history}`,
 				"info",
 			);
 			return;
@@ -432,6 +461,8 @@ export function createMultiCodexController(
 		await ctx.ui.select("MultiCodex Paths", [
 			`Managed account storage: ${paths.storage}`,
 			`Extension settings: ${paths.settings}`,
+			`Rotation settings: ${paths.rotation}`,
+			`Usage history: ${paths.history}`,
 		]);
 	}
 

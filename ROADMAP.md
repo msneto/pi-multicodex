@@ -24,7 +24,7 @@ The current shipped behavior is:
 - `/multicodex use` and `/multicodex show` remain aliases into that merged account-management flow.
 - `/multicodex refresh`, `/multicodex verify`, `/multicodex path`, `/multicodex reset`, and `/multicodex help` are available without opening a panel.
 - `/multicodex footer` opens an interactive settings panel with live preview, or prints a summary in non-interactive mode.
-- The usage footer displays severity-based color tiers that shift as quota depletes.
+- The usage footer uses a compact, configurable layout with separator and account-label truncation controls while still applying severity-based color tiers as quota depletes.
 - Footer settings are stored in `~/.pi/agent/settings.json` under `pi-multicodex`.
 - Managed account storage is stored in `~/.pi/agent/codex-accounts.json`.
 - The behavior contract (selection priority, retry policy, manual override, error classification) is documented in README.
@@ -171,12 +171,9 @@ Goal: finish the footer experience so it matches the new command model and follo
 ### Already done
 
 - [x] Debounce model-change refresh work so rapid `Ctrl+P` cycling never blocks on auth sync or usage fetches
-- [x] Render each reset countdown next to its matching usage period instead of grouping them at the end
-- [x] Add live preview inside the footer settings panel
-- [x] Update the actual footer while footer settings change in the panel
-- [x] Tune the footer color palette before locking the final style
-- [x] Tighten footer updates so account switches and quota rotation are reflected immediately
-- [x] Add tests for live preview updates, model-switch debouncing, and footer/account synchronization
+- [x] Render a compact footer layout with configurable separator and account-label width
+- [x] Keep `left` implicit and append `used` only when usage mode switches to consumed display
+- [x] Preserve severity-based colors while shortening reset countdown text
 
 ### Remaining work
 

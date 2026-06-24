@@ -44,6 +44,49 @@ function formatUsageLine(window?: {
 	return `${formatRemainingPercent(window?.usedPercent)} (used ${formatPercent(window?.usedPercent)}, reset ${formatCountdown(window?.resetAt)})`;
 }
 
+function formatBlockedAccountsLine(
+	accountManager: AccountManager,
+	accounts: Account[],
+): string | undefined {
+	const blockedAccounts = accounts.flatMap((account) => {
+		const usage = accountManager.getCachedUsage(account.email);
+		if (!usage) return [];
+		const windows: string[] = [];
+		if (
+			typeof usage.primary?.usedPercent === "number" &&
+			usage.primary.usedPercent >= 100
+		) {
+			windows.push("5h 0%");
+		}
+		if (
+			typeof usage.secondary?.usedPercent === "number" &&
+			usage.secondary.usedPercent >= 100
+		) {
+			windows.push("7d 0%");
+		}
+		return windows.length > 0
+			? [`${account.email} (${windows.join(", ")})`]
+			: [];
+	});
+	if (blockedAccounts.length === 0) return undefined;
+	return `blocked: ${blockedAccounts.join("; ")}`;
+}
+
+function formatCapacityWindowLine(
+	label: string,
+	summary: ReturnType<typeof summarizeWindow>,
+): string {
+	const reset =
+		summary.soonestResetAt !== undefined
+			? `, reset ${formatCountdown(summary.soonestResetAt)}`
+			: "";
+	const equivalentAccounts = Math.round(summary.remainingTotal) / 100;
+	const equivalentLabel = Number.isInteger(equivalentAccounts)
+		? String(equivalentAccounts)
+		: equivalentAccounts.toFixed(1);
+	const accountLabel = equivalentAccounts === 1 ? "account" : "accounts";
+	return `${label}: ~${equivalentLabel} ${accountLabel}${reset}`;
+}
 function getReportTags(
 	accountManager: AccountManager,
 	account: Account,
@@ -72,8 +115,9 @@ function summarizeWindow(
 	window: "primary" | "secondary",
 	now: number,
 ): {
-	availableCount: number;
+	usableCount: number;
 	knownCount: number;
+	blockedCount: number;
 	unknownCount: number;
 	remainingTotal: number;
 	soonestResetAt: number | undefined;
@@ -82,53 +126,46 @@ function summarizeWindow(
 		(account) => isAccountAvailable(account, now) && !account.needsReauth,
 	);
 	let knownCount = 0;
+	let blockedCount = 0;
 	let unknownCount = 0;
 	let remainingTotal = 0;
 	let soonestResetAt: number | undefined;
 
 	for (const account of available) {
 		const usage = accountManager.getCachedUsage(account.email);
-		const usageWindow =
+		const primaryUsed = usage?.primary?.usedPercent;
+		const secondaryUsed = usage?.secondary?.usedPercent;
+		const windowUsage =
 			window === "primary" ? usage?.primary : usage?.secondary;
-		if (typeof usageWindow?.usedPercent === "number") {
-			remainingTotal += Math.max(0, 100 - usageWindow.usedPercent);
+		const isBlocked =
+			(typeof primaryUsed === "number" && primaryUsed >= 100) ||
+			(typeof secondaryUsed === "number" && secondaryUsed >= 100);
+		if (isBlocked) {
+			blockedCount += 1;
+			continue;
+		}
+		if (typeof windowUsage?.usedPercent === "number") {
+			remainingTotal += Math.max(0, 100 - windowUsage.usedPercent);
 			knownCount += 1;
 		} else {
 			unknownCount += 1;
 		}
-		if (typeof usageWindow?.resetAt === "number") {
+		if (typeof windowUsage?.resetAt === "number") {
 			soonestResetAt =
 				soonestResetAt === undefined
-					? usageWindow.resetAt
-					: Math.min(soonestResetAt, usageWindow.resetAt);
+					? windowUsage.resetAt
+					: Math.min(soonestResetAt, windowUsage.resetAt);
 		}
 	}
 
 	return {
-		availableCount: available.length,
+		usableCount: available.length - blockedCount,
 		knownCount,
+		blockedCount,
 		unknownCount,
 		remainingTotal,
 		soonestResetAt,
 	};
-}
-
-function formatWindowSummary(
-	label: string,
-	summary: ReturnType<typeof summarizeWindow>,
-): string {
-	const reset =
-		summary.soonestResetAt !== undefined
-			? `; next reset ${formatCountdown(summary.soonestResetAt)}`
-			: "";
-	const unknown =
-		summary.unknownCount > 0 ? `, ${summary.unknownCount} unknown` : "";
-	const equivalentAccounts = Math.round(summary.remainingTotal) / 100;
-	const equivalentLabel = Number.isInteger(equivalentAccounts)
-		? String(equivalentAccounts)
-		: equivalentAccounts.toFixed(1);
-	const accountLabel = summary.availableCount === 1 ? "account" : "accounts";
-	return `${label}: about ${equivalentLabel} full ${accountLabel} worth of combined capacity across ${summary.availableCount} ${accountLabel} (${summary.knownCount} known${unknown})${reset}`;
 }
 
 function buildUsageIndex(
@@ -143,6 +180,25 @@ function buildUsageIndex(
 	return usageByEmail;
 }
 
+function formatQuotaSnapshotSection(
+	accountManager: AccountManager,
+	accounts: Account[],
+): string[] {
+	const activeEmail = accountManager.getActiveAccount()?.email;
+	const lines = ["quota snapshot:"];
+	for (const account of accounts) {
+		const usage = accountManager.getCachedUsage(account.email);
+		const activeTag = activeEmail === account.email ? " [active]" : "";
+		lines.push(`  - ${account.email}${activeTag}`);
+		if (!usage) {
+			lines.push("    - no cached usage");
+			continue;
+		}
+		lines.push(`    - 5h: ${formatUsageLine(usage.primary)}`);
+		lines.push(`    - 7d: ${formatUsageLine(usage.secondary)}`);
+	}
+	return lines;
+}
 function sortLowestUsageAccounts(
 	accounts: Account[],
 	usageByEmail: Map<string, CodexUsageSnapshot>,
@@ -312,6 +368,8 @@ function formatRankingDecisionSection(
 			? sortStableWeeklyAccounts(rankable, usageByEmail, now)
 			: [];
 	const stableWinner = stableRanking[0];
+	const stablePressure =
+		stableRanking.length > 0 && stableRanking.every((entry) => entry.score < 0);
 
 	for (const account of accounts) {
 		const usage = usageByEmail.get(account.email);
@@ -344,13 +402,6 @@ function formatRankingDecisionSection(
 			}
 			continue;
 		}
-
-		lines.push(
-			formatAccountReasonLine(`5h: ${formatUsageLine(usage.primary)}`),
-		);
-		lines.push(
-			formatAccountReasonLine(`7d: ${formatUsageLine(usage.secondary)}`),
-		);
 
 		if (mode === "manual") {
 			lines.push(
@@ -484,19 +535,22 @@ function formatRankingDecisionSection(
 		if (isSelected) {
 			lines.push(
 				formatAccountReasonLine(
-					"why: highest weekly-burn score among rankable accounts",
+					stablePressure
+						? "why: highest weekly-burn score, but all candidates are under pressure"
+						: "why: highest weekly-burn score among rankable accounts",
 				),
 			);
 		} else if (stableWinner) {
 			const scoreGap = stableWinner.score - entry.score;
 			lines.push(
 				formatAccountReasonLine(
-					`lost: score is ${scoreGap.toFixed(3)} below winner`,
+					stablePressure
+						? `lost: under pressure; winner is least-bad by ${scoreGap.toFixed(3)}`
+						: `lost: score is ${scoreGap.toFixed(3)} below winner`,
 				),
 			);
 		}
 	}
-
 	return lines;
 }
 
@@ -522,12 +576,16 @@ export function formatAccountReportLines(
 		now,
 	);
 
+	const blockedLine = formatBlockedAccountsLine(accountManager, accounts);
 	return [
+		...formatQuotaSnapshotSection(accountManager, accounts),
+		"\u200B",
 		...formatRankingDecisionSection(accountManager, accounts, now),
 
 		"\u200B",
 		"capacity estimate:",
-		`  - ${formatWindowSummary("5h aggregate", primarySummary)}`,
-		`  - ${formatWindowSummary("7d aggregate", secondarySummary)}`,
+		...(blockedLine ? [`  - ${blockedLine}`] : []),
+		`  - ${formatCapacityWindowLine("5h", primarySummary)}`,
+		`  - ${formatCapacityWindowLine("7d", secondarySummary)}`,
 	];
 }

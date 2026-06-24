@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { getAgentPath } from "pi-provider-utils/agent-paths";
 import { z } from "zod";
+import { LEGACY_STORAGE_FILE, MULTICODEX_ACCOUNTS_FILE } from "./paths";
 
 // ---------------------------------------------------------------------------
 // Schema
@@ -126,34 +126,6 @@ function migrateRawStorage(raw: unknown): StorageData {
 	return { version: CURRENT_VERSION, accounts, activeEmail: undefined };
 }
 
-// ---------------------------------------------------------------------------
-// I/O
-// ---------------------------------------------------------------------------
-
-export const STORAGE_FILE = getAgentPath("codex-accounts.json");
-
-export function loadStorage(): StorageData {
-	try {
-		if (fs.existsSync(STORAGE_FILE)) {
-			const text = fs.readFileSync(STORAGE_FILE, "utf-8");
-			const raw = JSON.parse(text) as Record<string, unknown>;
-			const needsMigration =
-				!("version" in raw) ||
-				raw.version !== CURRENT_VERSION ||
-				needsLegacyStrip(raw);
-			const data = migrateRawStorage(raw);
-			if (needsMigration) {
-				saveStorage(data);
-			}
-			return data;
-		}
-	} catch (error) {
-		console.error("Failed to load multicodex accounts:", error);
-	}
-
-	return { version: CURRENT_VERSION, accounts: [], activeEmail: undefined };
-}
-
 function needsLegacyStrip(raw: Record<string, unknown>): boolean {
 	const accounts = Array.isArray(raw.accounts) ? raw.accounts : [];
 	for (const entry of accounts) {
@@ -164,6 +136,45 @@ function needsLegacyStrip(raw: Record<string, unknown>): boolean {
 		}
 	}
 	return false;
+}
+
+function readStorageFile(filePath: string): StorageData | undefined {
+	if (!fs.existsSync(filePath)) return undefined;
+	try {
+		const text = fs.readFileSync(filePath, "utf-8");
+		const raw = JSON.parse(text) as Record<string, unknown>;
+		const needsMigration =
+			!("version" in raw) ||
+			raw.version !== CURRENT_VERSION ||
+			needsLegacyStrip(raw);
+		const data = migrateRawStorage(raw);
+		if (needsMigration && filePath === MULTICODEX_ACCOUNTS_FILE) {
+			saveStorage(data);
+		}
+		return data;
+	} catch (error) {
+		console.error("Failed to load multicodex accounts:", error);
+		return undefined;
+	}
+}
+
+// ---------------------------------------------------------------------------
+// I/O
+// ---------------------------------------------------------------------------
+
+export const STORAGE_FILE = MULTICODEX_ACCOUNTS_FILE;
+
+export function loadStorage(): StorageData {
+	const current = readStorageFile(STORAGE_FILE);
+	if (current) return current;
+
+	const legacy = readStorageFile(LEGACY_STORAGE_FILE);
+	if (legacy) {
+		saveStorage(legacy);
+		return legacy;
+	}
+
+	return { version: CURRENT_VERSION, accounts: [], activeEmail: undefined };
 }
 
 export function saveStorage(data: StorageData): void {

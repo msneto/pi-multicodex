@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => ({
 			showAccount: true,
 			showReset: true,
 			order: "account-first",
+			separator: "/",
+			accountLabelMaxChars: 14,
 		})),
 	},
 	rotationSettings: { mocked: true },
@@ -73,6 +75,8 @@ describe("createMultiCodexController", () => {
 			showAccount: false,
 			showReset: false,
 			order: "usage-first",
+			separator: "|",
+			accountLabelMaxChars: 16,
 		});
 
 		expect(mocks.statusController.setPreferences).toHaveBeenCalledWith({
@@ -81,6 +85,8 @@ describe("createMultiCodexController", () => {
 			showAccount: false,
 			showReset: false,
 			order: "usage-first",
+			separator: "|",
+			accountLabelMaxChars: 16,
 		});
 		expect(controller.getPreferences()).toEqual({
 			usageMode: "left",
@@ -88,6 +94,8 @@ describe("createMultiCodexController", () => {
 			showAccount: true,
 			showReset: true,
 			order: "account-first",
+			separator: "/",
+			accountLabelMaxChars: 14,
 		});
 	});
 

@@ -131,10 +131,59 @@ describe("formatAccountReportLines", () => {
 		const lines = formatAccountReportLines(accountManager).join("\n");
 
 		expect(lines).toContain("capacity estimate:");
-		expect(lines).toContain(
-			"about 2 full accounts worth of combined capacity across 2 accounts",
-		);
-		expect(lines).toContain("5h aggregate");
-		expect(lines).toContain("7d aggregate");
+		expect(lines).toContain("  - 5h: ~2 accounts, reset 1m");
+		expect(lines).toContain("  - 7d: ~2 accounts, reset 2m");
+	});
+
+	it("shows hierarchical quota snapshot", () => {
+		vi.spyOn(Date, "now").mockReturnValue(NOW);
+		const accountManager = createAccountManagerMock({
+			activeEmail: "a@example.com",
+			usage: {
+				"a@example.com": {
+					primary: { usedPercent: 1, resetAt: NOW + 60_000 },
+					secondary: { usedPercent: 100, resetAt: NOW + 120_000 },
+				},
+				"b@example.com": {
+					primary: { usedPercent: 40, resetAt: NOW + 60_000 },
+					secondary: { usedPercent: 50, resetAt: NOW + 120_000 },
+				},
+			},
+		});
+
+		const lines = formatAccountReportLines(accountManager).join("\n");
+
+		expect(lines).toContain("quota snapshot:");
+		expect(lines).toContain("blocked: a@example.com (7d 0%)");
+		expect(lines).toContain("  - a@example.com [active]");
+		expect(lines).toContain("    - 5h: 99% left (used 1%, reset 1m)");
+		expect(lines).toContain("    - 7d: 0% left (used 100%, reset 2m)");
+		expect(lines).toContain("  - b@example.com");
+	});
+
+	it("does not repeat quota in why section", () => {
+		vi.spyOn(Date, "now").mockReturnValue(NOW);
+		const accountManager = createAccountManagerMock({
+			activeEmail: "a@example.com",
+			usage: {
+				"a@example.com": {
+					primary: { usedPercent: 20, resetAt: NOW + 60_000 },
+					secondary: { usedPercent: 30, resetAt: NOW + 120_000 },
+				},
+				"b@example.com": {
+					primary: { usedPercent: 40, resetAt: NOW + 60_000 },
+					secondary: { usedPercent: 50, resetAt: NOW + 120_000 },
+				},
+			},
+		});
+
+		const lines = formatAccountReportLines(accountManager);
+		const whyIndex = lines.indexOf("why each account won or lost:");
+		const capacityIndex = lines.indexOf("capacity estimate:");
+		expect(whyIndex).toBeGreaterThan(-1);
+		expect(capacityIndex).toBeGreaterThan(whyIndex);
+		const whyLines = lines.slice(whyIndex + 1, capacityIndex).join("\n");
+		expect(whyLines).not.toContain("5h:");
+		expect(whyLines).not.toContain("7d:");
 	});
 });

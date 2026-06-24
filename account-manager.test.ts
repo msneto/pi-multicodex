@@ -7,8 +7,8 @@ const mocks = vi.hoisted(() => ({
 	},
 	loadImportedOpenAICodexAuth: vi.fn(),
 	saveStorage: vi.fn(),
+	appendUsageHistorySample: vi.fn(),
 }));
-
 vi.mock("./storage", () => ({
 	loadStorage: () =>
 		JSON.parse(JSON.stringify(mocks.storageData)) as {
@@ -16,6 +16,10 @@ vi.mock("./storage", () => ({
 			activeEmail?: string;
 		},
 	saveStorage: mocks.saveStorage,
+}));
+
+vi.mock("./usage-history", () => ({
+	appendUsageHistorySample: mocks.appendUsageHistorySample,
 }));
 
 vi.mock("./auth", () => ({
@@ -226,6 +230,50 @@ describe("AccountManager account deduplication", () => {
 		expect(manager.getAccounts()).toHaveLength(1);
 		expect(account.accessToken).toBe("new-access");
 		expect(account.refreshToken).toBe("new-refresh");
+	});
+});
+
+describe("AccountManager usage history", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		mocks.storageData.accounts = [];
+		mocks.storageData.activeEmail = undefined;
+		mocks.loadImportedOpenAICodexAuth.mockResolvedValue(undefined);
+	});
+
+	it("records usage sample after refresh", async () => {
+		mocks.storageData.accounts = [
+			{
+				email: "usage@example.com",
+				accessToken: "access",
+				refreshToken: "refresh",
+				expiresAt: Date.now() + 3600_000,
+			},
+		];
+		const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+			ok: true,
+			json: async () => ({
+				rate_limit: {
+					primary_window: { used_percent: 12, reset_at: 1_700_000_001 },
+					secondary_window: { used_percent: 34, reset_at: 1_700_000_002 },
+				},
+			}),
+		} as never);
+
+		const manager = new AccountManager();
+		const account = manager.getAccount("usage@example.com");
+		expect(account).toBeDefined();
+		if (!account) return;
+		await manager.refreshUsageForAccount(account, { force: true });
+
+		expect(fetchMock).toHaveBeenCalled();
+		expect(mocks.appendUsageHistorySample).toHaveBeenCalledWith(
+			expect.objectContaining({
+				email: "usage@example.com",
+				primary: { usedPercent: 12, resetAt: 1_700_000_001_000 },
+				secondary: { usedPercent: 34, resetAt: 1_700_000_002_000 },
+			}),
+		);
 	});
 });
 

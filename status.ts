@@ -25,15 +25,20 @@ const SETTINGS_FILE = getAgentSettingsPath();
 const REFRESH_INTERVAL_MS = 60_000;
 const MODEL_SELECT_REFRESH_DEBOUNCE_MS = 250;
 const UNKNOWN_PERCENT = "--";
-const BRAND_LABEL = "Codex";
-const SEGMENT_SEPARATOR = "·";
-const FIVE_HOUR_LABEL = "5h:";
-const SEVEN_DAY_LABEL = "7d:";
+const SEGMENT_SEPARATOR = "/";
+const ACCOUNT_LABEL_MAX_CHARS_VALUES = [12, 14, 16, 20, 24] as const;
+const ACCOUNT_LABEL_MAX_CHARS_SET = new Set<number>(
+	ACCOUNT_LABEL_MAX_CHARS_VALUES,
+);
+const FIVE_HOUR_LABEL = "5h";
+const SEVEN_DAY_LABEL = "7d";
 
 type MaybeModel = Model<Api> | undefined;
 export type PercentDisplayMode = "left" | "used";
 export type ResetWindowMode = "5h" | "7d" | "both";
 export type StatusOrder = "account-first" | "usage-first";
+
+type FooterSeparator = "/" | "|" | "·";
 
 export interface FooterPreferences {
 	usageMode: PercentDisplayMode;
@@ -41,6 +46,8 @@ export interface FooterPreferences {
 	showAccount: boolean;
 	showReset: boolean;
 	order: StatusOrder;
+	separator: FooterSeparator;
+	accountLabelMaxChars: number;
 }
 
 const DEFAULT_PREFERENCES: FooterPreferences = {
@@ -49,6 +56,8 @@ const DEFAULT_PREFERENCES: FooterPreferences = {
 	showAccount: true,
 	showReset: true,
 	order: "account-first",
+	separator: SEGMENT_SEPARATOR as FooterSeparator,
+	accountLabelMaxChars: 14,
 };
 
 function asObject(value: unknown): Record<string, unknown> | null {
@@ -66,6 +75,14 @@ function isResetWindowMode(value: unknown): value is ResetWindowMode {
 
 function isStatusOrder(value: unknown): value is StatusOrder {
 	return value === "account-first" || value === "usage-first";
+}
+
+function isFooterSeparator(value: unknown): value is FooterSeparator {
+	return value === "/" || value === "|" || value === "·";
+}
+
+function isAccountLabelMaxChars(value: unknown): value is number {
+	return typeof value === "number" && ACCOUNT_LABEL_MAX_CHARS_SET.has(value);
 }
 
 function normalizePreferences(value: unknown): FooterPreferences {
@@ -88,6 +105,12 @@ function normalizePreferences(value: unknown): FooterPreferences {
 		order: isStatusOrder(record?.order)
 			? record.order
 			: DEFAULT_PREFERENCES.order,
+		separator: isFooterSeparator(record?.separator)
+			? record.separator
+			: DEFAULT_PREFERENCES.separator,
+		accountLabelMaxChars: isAccountLabelMaxChars(record?.accountLabelMaxChars)
+			? record.accountLabelMaxChars
+			: DEFAULT_PREFERENCES.accountLabelMaxChars,
 	};
 }
 
@@ -130,16 +153,33 @@ function usedToDisplayPercent(
 	return mode === "left" ? left : clampPercent(100 - left);
 }
 
-function formatBrand(ctx: ExtensionContext): string {
-	return ctx.ui.theme.fg("muted", BRAND_LABEL);
+function truncateText(text: string, maxChars: number): string {
+	if (maxChars <= 0) return "";
+	if (text.length <= maxChars) return text;
+	if (maxChars === 1) return "…";
+	return `${text.slice(0, maxChars - 1)}…`;
+}
+
+function formatAccountLabel(
+	ctx: ExtensionContext,
+	accountEmail: string,
+	preferences: FooterPreferences,
+): string {
+	return ctx.ui.theme.fg(
+		"text",
+		truncateText(accountEmail, preferences.accountLabelMaxChars),
+	);
 }
 
 function formatLoading(ctx: ExtensionContext): string {
 	return ctx.ui.theme.fg("muted", "loading...");
 }
 
-function formatSeparator(ctx: ExtensionContext): string {
-	return ctx.ui.theme.fg("muted", SEGMENT_SEPARATOR);
+function formatSeparator(
+	ctx: ExtensionContext,
+	preferences: FooterPreferences,
+): string {
+	return ctx.ui.theme.fg("muted", preferences.separator);
 }
 
 function getUsageSeverityToken(
@@ -171,7 +211,8 @@ function formatPercent(
 		return UNKNOWN_PERCENT;
 	}
 
-	return `${Math.round(clampPercent(displayPercent))}% ${mode}`;
+	const rounded = Math.round(clampPercent(displayPercent));
+	return mode === "used" ? `${rounded}% used` : `${rounded}%`;
 }
 
 function formatResetCountdown(resetAt: number | undefined): string | undefined {
@@ -181,9 +222,13 @@ function formatResetCountdown(resetAt: number | undefined): string | undefined {
 	const hours = Math.floor((totalSeconds % 86_400) / 3_600);
 	const minutes = Math.floor((totalSeconds % 3_600) / 60);
 	const seconds = totalSeconds % 60;
-	if (days > 0) return `${days}d${hours}h`;
-	if (hours > 0) return `${hours}h${minutes}m`;
-	if (minutes > 0) return `${minutes}m`;
+	if (days > 0) {
+		return minutes > 0 ? `${days}d${hours}h${minutes}` : `${days}d${hours}h`;
+	}
+	if (hours > 0) {
+		return minutes > 0 ? `${hours}h${minutes}` : `${hours}h`;
+	}
+	if (minutes > 0) return `${minutes}`;
 	return `${seconds}s`;
 }
 
@@ -209,15 +254,14 @@ function formatUsageSegment(
 		usedPercent,
 		preferences.usageMode,
 	);
-	const parts = [
-		`${label}${formatPercent(displayPercent, preferences.usageMode)}`,
-	];
+	const parts = [label];
 	if (showReset) {
 		const countdown = formatResetCountdown(resetAt);
 		if (countdown) {
-			parts.push(`(↺${countdown})`);
+			parts.push(countdown);
 		}
 	}
+	parts.push(formatPercent(displayPercent, preferences.usageMode));
 	return ctx.ui.theme.fg(
 		getUsageSeverityToken(displayPercent, preferences.usageMode),
 		parts.join(" "),
@@ -235,12 +279,10 @@ export function formatActiveAccountStatus(
 	preferences: FooterPreferences,
 ): string {
 	const accountText = preferences.showAccount
-		? ctx.ui.theme.fg("text", accountEmail)
+		? formatAccountLabel(ctx, accountEmail, preferences)
 		: undefined;
 	if (!usage) {
-		return [formatBrand(ctx), accountText, formatLoading(ctx)]
-			.filter(Boolean)
-			.join(" ");
+		return [accountText, formatLoading(ctx)].filter(Boolean).join(" ");
 	}
 
 	const fiveHour = formatUsageSegment(
@@ -261,17 +303,19 @@ export function formatActiveAccountStatus(
 	);
 
 	const usageSegments = [fiveHour, sevenDay].filter(Boolean);
-	const usageText = usageSegments.join(` ${formatSeparator(ctx)} `);
+	const usageText = usageSegments.join(
+		` ${formatSeparator(ctx, preferences)} `,
+	);
 	const leading =
 		preferences.order === "account-first"
-			? [formatBrand(ctx), accountText, usageText]
-			: [formatBrand(ctx), usageText];
+			? [accountText, usageText]
+			: [usageText];
 	const trailing =
 		preferences.order === "account-first" ? [] : [accountText].filter(Boolean);
 
 	return [...leading, ...trailing]
 		.filter(Boolean)
-		.join(` ${formatSeparator(ctx)} `);
+		.join(` ${formatSeparator(ctx, preferences)} `);
 }
 
 function getBooleanLabel(value: boolean): string {
@@ -286,6 +330,20 @@ function createSettingsItems(preferences: FooterPreferences): SettingItem[] {
 			description: "Show remaining or consumed quota percentages",
 			currentValue: preferences.usageMode,
 			values: ["left", "used"],
+		},
+		{
+			id: "separator",
+			label: "Separator",
+			description: "Choose the footer separator character",
+			currentValue: preferences.separator,
+			values: ["/", "|", "·"],
+		},
+		{
+			id: "accountLabelMaxChars",
+			label: "Account label width",
+			description: "Trim account labels to this many characters including …",
+			currentValue: String(preferences.accountLabelMaxChars),
+			values: ACCOUNT_LABEL_MAX_CHARS_VALUES.map(String),
 		},
 		{
 			id: "resetWindow",
@@ -305,8 +363,7 @@ function createSettingsItems(preferences: FooterPreferences): SettingItem[] {
 		{
 			id: "showReset",
 			label: "Show reset countdown",
-			description:
-				"Display a reset countdown like the codex usage footer extension",
+			description: "Display a reset countdown beside each usage window",
 			currentValue: getBooleanLabel(preferences.showReset),
 			values: ["on", "off"],
 		},
@@ -326,6 +383,11 @@ function syncSettingsListValues(
 	preferences: FooterPreferences,
 ): void {
 	settingsList.updateValue("usageMode", preferences.usageMode);
+	settingsList.updateValue("separator", preferences.separator);
+	settingsList.updateValue(
+		"accountLabelMaxChars",
+		String(preferences.accountLabelMaxChars),
+	);
 	settingsList.updateValue("resetWindow", preferences.resetWindow);
 	settingsList.updateValue(
 		"showAccount",
@@ -342,6 +404,15 @@ function applyPreferenceChange(
 ): FooterPreferences {
 	if (id === "usageMode" && isPercentDisplayMode(newValue)) {
 		return { ...preferences, usageMode: newValue };
+	}
+	if (id === "separator" && isFooterSeparator(newValue)) {
+		return { ...preferences, separator: newValue };
+	}
+	if (id === "accountLabelMaxChars") {
+		const parsed = Number(newValue);
+		if (isAccountLabelMaxChars(parsed)) {
+			return { ...preferences, accountLabelMaxChars: parsed };
+		}
 	}
 	if (id === "resetWindow" && isResetWindowMode(newValue)) {
 		return { ...preferences, resetWindow: newValue };
@@ -599,8 +670,7 @@ export function createUsageStatusController(accountManager: AccountManager) {
 		theme: ExtensionCommandContext["ui"]["theme"],
 		draft: FooterPreferences,
 	): string {
-		const previewText =
-			getStatusText(ctx, draft) ?? `${formatBrand(ctx)} ${formatLoading(ctx)}`;
+		const previewText = getStatusText(ctx, draft) ?? formatLoading(ctx);
 		return `${theme.fg("dim", "Preview")}: ${previewText}`;
 	}
 
@@ -619,10 +689,7 @@ export function createUsageStatusController(accountManager: AccountManager) {
 			);
 			container.addChild(
 				new Text(
-					theme.fg(
-						"dim",
-						"Configure the usage footer to match the codex usage extension style.",
-					),
+					theme.fg("dim", "Configure a compact, readable usage footer."),
 					1,
 					0,
 				),

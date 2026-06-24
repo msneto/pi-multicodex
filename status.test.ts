@@ -12,6 +12,8 @@ const defaultPreferences: FooterPreferences = {
 	showAccount: true,
 	showReset: true,
 	order: "account-first",
+	separator: "/",
+	accountLabelMaxChars: 14,
 };
 
 function createContext(overrides?: {
@@ -48,91 +50,117 @@ describe("isManagedModel", () => {
 });
 
 describe("formatActiveAccountStatus", () => {
-	it("renders account, usage, and both reset countdowns beside their matching periods", () => {
+	it("renders compact account-first status without brand or left label", () => {
 		const ctx = createContext();
+		const now = Date.now();
 		const text = formatActiveAccountStatus(
 			ctx,
-			"a@example.com",
+			"arte@galinhapintadinha.com.br",
 			{
-				primary: { usedPercent: 25, resetAt: Date.now() + 60_000 },
-				secondary: { usedPercent: 60, resetAt: Date.now() + 3_600_000 },
+				primary: {
+					usedPercent: 25,
+					resetAt: now + (3 * 3_600 + 15 * 60) * 1000,
+				},
+				secondary: {
+					usedPercent: 60,
+					resetAt: now + (5 * 86_400 + 4 * 3_600 + 15 * 60) * 1000,
+				},
 				fetchedAt: 0,
 			},
 			defaultPreferences,
 		);
 
-		expect(text).toContain("Codex");
-		expect(text).toContain("a@example.com");
-		expect(text).toContain("5h:75% left (↺");
-		expect(text).toContain("7d:40% left (↺");
-		expect(text).not.toContain("(5h:↺");
-		expect(text).not.toContain("(7d:↺");
+		expect(text).toContain("arte@galinhap…");
+		expect(text).toContain(" / 5h 3h15 75%");
+		expect(text).toContain(" / 7d 5d4h15 40%");
+		expect(text).not.toContain("Codex");
+		expect(text).not.toContain("left");
+		expect(text).not.toContain("used");
 	});
 
 	it("supports hiding the account and moving it after the usage fields", () => {
 		const ctx = createContext();
+		const now = Date.now();
 		const text = formatActiveAccountStatus(
 			ctx,
 			"a@example.com",
 			{
-				primary: { usedPercent: 10, resetAt: 1 },
-				secondary: { usedPercent: 20, resetAt: 2 },
+				primary: {
+					usedPercent: 10,
+					resetAt: now + (3 * 3_600 + 15 * 60) * 1000,
+				},
+				secondary: {
+					usedPercent: 20,
+					resetAt: now + (5 * 86_400 + 4 * 3_600 + 15 * 60) * 1000,
+				},
 				fetchedAt: 0,
 			},
 			{
 				...defaultPreferences,
 				showAccount: false,
-				showReset: false,
 				order: "usage-first",
 				usageMode: "used",
 			},
 		);
 
-		expect(text).toContain("5h:10% used");
-		expect(text).toContain("7d:20% used");
+		expect(text).toContain("5h 3h15 10% used");
+		expect(text).toContain("7d 5d4h15 20% used");
 		expect(text).not.toContain("a@example.com");
-		expect(text).not.toContain("↺");
+		expect(text).not.toContain("left");
 	});
 
-	it("colors full usage windows by severity, adds muted separators, and lifts the account text", () => {
+	it("colors usage windows by severity and separator", () => {
 		const ctx = createContext({
 			color: (token: string, text: string) => `[${token}:${text}]`,
 		});
+		const now = Date.now();
 		const text = formatActiveAccountStatus(
 			ctx,
 			"a@example.com",
 			{
-				primary: { usedPercent: 25, resetAt: Date.now() + 60_000 },
-				secondary: { usedPercent: 95, resetAt: Date.now() + 120_000 },
+				primary: {
+					usedPercent: 25,
+					resetAt: now + (3 * 3_600 + 15 * 60) * 1000,
+				},
+				secondary: {
+					usedPercent: 95,
+					resetAt: now + (5 * 86_400 + 4 * 3_600 + 15 * 60) * 1000,
+				},
 				fetchedAt: 0,
 			},
-			defaultPreferences,
+			{ ...defaultPreferences, separator: "|" },
 		);
 
-		expect(text).toContain("[muted:Codex]");
 		expect(text).toContain("[text:a@example.com]");
-		expect(text).toContain("[success:5h:75% left (↺");
-		expect(text).toContain("[error:7d:5% left (↺");
-		expect(text).toContain("[muted:·]");
+		expect(text).toContain("[success:5h 3h15 75%]");
+		expect(text).toContain("[error:7d 5d4h15 5%]");
+		expect(text).toContain("[muted:|");
 	});
 
 	it("uses thinkingMedium for neutral used windows", () => {
 		const ctx = createContext({
 			color: (token: string, text: string) => `[${token}:${text}]`,
 		});
+		const now = Date.now();
 		const text = formatActiveAccountStatus(
 			ctx,
 			"a@example.com",
 			{
-				primary: { usedPercent: 52, resetAt: Date.now() + 60_000 },
-				secondary: { usedPercent: 96, resetAt: Date.now() + 120_000 },
+				primary: {
+					usedPercent: 52,
+					resetAt: now + (3 * 3_600 + 15 * 60) * 1000,
+				},
+				secondary: {
+					usedPercent: 96,
+					resetAt: now + (5 * 86_400 + 4 * 3_600 + 15 * 60) * 1000,
+				},
 				fetchedAt: 0,
 			},
 			{ ...defaultPreferences, usageMode: "used" },
 		);
 
-		expect(text).toContain("[thinkingMedium:5h:52% used (↺");
-		expect(text).toContain("[error:7d:96% used (↺");
+		expect(text).toContain("[thinkingMedium:5h 3h15 52% used]");
+		expect(text).toContain("[error:7d 5d4h15 96% used]");
 	});
 
 	it("uses muted loading text and dim unknown usage windows", () => {
@@ -149,17 +177,17 @@ describe("formatActiveAccountStatus", () => {
 			ctx,
 			"a@example.com",
 			{
-				primary: { resetAt: Date.now() + 60_000 },
-				secondary: { resetAt: Date.now() + 120_000 },
+				primary: {},
+				secondary: {},
 				fetchedAt: 0,
 			},
 			defaultPreferences,
 		);
 
-		expect(loading).toContain("[muted:Codex]");
+		expect(loading).toContain("[text:a@example.com]");
 		expect(loading).toContain("[muted:loading...]");
-		expect(unknown).toContain("[dim:5h:-- (↺");
-		expect(unknown).toContain("[dim:7d:-- (↺");
+		expect(unknown).toContain("[dim:5h --]");
+		expect(unknown).toContain("[dim:7d --]");
 	});
 });
 
@@ -202,11 +230,11 @@ describe("createUsageStatusController", () => {
 		);
 		expect(setStatus).toHaveBeenCalledWith(
 			"multicodex-usage",
-			expect.stringContaining("5h:90% left"),
+			expect.stringContaining("90%"),
 		);
 		expect(setStatus).toHaveBeenCalledWith(
 			"multicodex-usage",
-			expect.stringContaining("7d:80% left"),
+			expect.stringContaining("80%"),
 		);
 	});
 
@@ -227,11 +255,11 @@ describe("createUsageStatusController", () => {
 
 		expect(setStatus).toHaveBeenCalledWith(
 			"multicodex-usage",
-			expect.stringContaining("5h:70% left"),
+			expect.stringContaining("70%"),
 		);
 		expect(setStatus).toHaveBeenCalledWith(
 			"multicodex-usage",
-			expect.stringContaining("7d:60% left"),
+			expect.stringContaining("60%"),
 		);
 	});
 
@@ -260,7 +288,7 @@ describe("createUsageStatusController", () => {
 
 		expect(setStatus).toHaveBeenCalledWith(
 			"multicodex-usage",
-			expect.stringContaining("5h:70% left"),
+			expect.stringContaining("70%"),
 		);
 		expect(refreshUsageForAccount).not.toHaveBeenCalled();
 
@@ -336,7 +364,7 @@ describe("createUsageStatusController", () => {
 		);
 		expect(setStatus).toHaveBeenLastCalledWith(
 			"multicodex-usage",
-			expect.stringContaining("5h:95% left"),
+			expect.stringContaining("95%"),
 		);
 	});
 });
