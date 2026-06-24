@@ -14,6 +14,7 @@ import {
 } from "@earendil-works/pi-tui";
 import { getAgentSettingsPath } from "pi-provider-utils/agent-paths";
 import type { AccountManager } from "./account-manager";
+import { formatAccountReportLines } from "./report";
 import type { RotationSettings } from "./rotation-settings";
 import { loadRotationSettings } from "./rotation-settings";
 import { createUsageStatusController, type FooterPreferences } from "./status";
@@ -76,6 +77,7 @@ export interface MultiCodexController {
 	): Promise<void>;
 	runFooterCommand(ctx: ExtensionCommandContext): Promise<void>;
 	runRotationCommand(ctx: ExtensionCommandContext): Promise<void>;
+	runReportCommand(ctx: ExtensionCommandContext): Promise<void>;
 	runVerifyCommand(ctx: ExtensionCommandContext): Promise<void>;
 	runPathCommand(ctx: ExtensionCommandContext): Promise<void>;
 	runResetCommand(
@@ -121,18 +123,17 @@ function getCooldownLabel(
 function createRotationSettingItems(settings: RotationSettings): SettingItem[] {
 	return [
 		{
+			id: "selectionStrategy",
+			label: "Rotation strategy",
+			description: "Choose lowest usage or stable weekly burn across the week",
+			currentValue: settings.selectionStrategy,
+			values: ["lowest-usage", "stable-weekly"],
+		},
+		{
 			id: "preferUntouched",
 			label: "Prefer untouched",
 			description: "Keep untouched accounts ahead of used accounts",
 			currentValue: getBooleanLabel(settings.preferUntouched),
-			values: ["on", "off"],
-		},
-		{
-			id: "preferWeeklyReset",
-			label: "Prefer earliest reset",
-			description:
-				"Choose accounts that reset sooner when several are available",
-			currentValue: getBooleanLabel(settings.preferWeeklyReset),
 			values: ["on", "off"],
 		},
 		{
@@ -157,11 +158,14 @@ function applyRotationSettingChange(
 	id: string,
 	newValue: string,
 ): RotationSettings {
+	if (
+		id === "selectionStrategy" &&
+		(newValue === "lowest-usage" || newValue === "stable-weekly")
+	) {
+		return { ...settings, selectionStrategy: newValue };
+	}
 	if (id === "preferUntouched") {
 		return { ...settings, preferUntouched: newValue === "on" };
-	}
-	if (id === "preferWeeklyReset") {
-		return { ...settings, preferWeeklyReset: newValue === "on" };
 	}
 	if (
 		id === "unknownResetCooldown" &&
@@ -383,6 +387,13 @@ export function createMultiCodexController(
 		});
 	}
 
+	async function runReportCommand(ctx: ExtensionCommandContext): Promise<void> {
+		await controller.loadRotationPreferences();
+		await accountManager.refreshUsageForAllAccounts();
+		const lines = formatAccountReportLines(accountManager);
+		ctx.ui.notify(lines.join("\n"), "info");
+	}
+
 	async function runVerifyCommand(ctx: ExtensionCommandContext): Promise<void> {
 		const summary = await controller.getVerifySummary();
 		await controller.loadPreferences(ctx);
@@ -476,6 +487,7 @@ export function createMultiCodexController(
 		resetState,
 		runFooterCommand,
 		runRotationCommand,
+		runReportCommand,
 		runVerifyCommand,
 		runPathCommand,
 		runResetCommand,

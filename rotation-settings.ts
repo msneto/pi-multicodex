@@ -6,11 +6,12 @@ import { z } from "zod";
 const SETTINGS_KEY = "pi-multicodex";
 const SETTINGS_FILE = getAgentSettingsPath();
 
+const SelectionStrategySchema = z.enum(["lowest-usage", "stable-weekly"]);
 const RotationCooldownSchema = z.enum(["15m", "1h", "6h"]);
 const RotationSettingsSchema = z
 	.object({
+		selectionStrategy: SelectionStrategySchema,
 		preferUntouched: z.boolean(),
-		preferWeeklyReset: z.boolean(),
 		unknownResetCooldown: RotationCooldownSchema,
 		preStreamRetryLimit: z.number().int().min(0).max(10),
 	})
@@ -19,12 +20,13 @@ const RotationSettingsSchema = z
 		description: "MultiCodex rotation settings",
 	});
 
+export type SelectionStrategy = z.infer<typeof SelectionStrategySchema>;
 export type RotationCooldown = z.infer<typeof RotationCooldownSchema>;
 export type RotationSettings = z.infer<typeof RotationSettingsSchema>;
 
 export const DEFAULT_ROTATION_SETTINGS: RotationSettings = {
+	selectionStrategy: "lowest-usage",
 	preferUntouched: true,
-	preferWeeklyReset: false,
 	unknownResetCooldown: "1h",
 	preStreamRetryLimit: 5,
 };
@@ -46,17 +48,32 @@ function normalizeRotationCooldown(value: unknown): RotationCooldown {
 		: DEFAULT_ROTATION_SETTINGS.unknownResetCooldown;
 }
 
+function normalizeSelectionStrategy(
+	value: unknown,
+	legacyPreferWeeklyReset: unknown,
+): SelectionStrategy {
+	if (value === "lowest-usage" || value === "stable-weekly") {
+		return value;
+	}
+
+	if (typeof legacyPreferWeeklyReset === "boolean") {
+		return legacyPreferWeeklyReset ? "stable-weekly" : "lowest-usage";
+	}
+
+	return DEFAULT_ROTATION_SETTINGS.selectionStrategy;
+}
+
 export function normalizeRotationSettings(value: unknown): RotationSettings {
 	const record = asObject(value);
 	return {
+		selectionStrategy: normalizeSelectionStrategy(
+			record?.selectionStrategy,
+			record?.preferWeeklyReset,
+		),
 		preferUntouched:
 			typeof record?.preferUntouched === "boolean"
 				? record.preferUntouched
 				: DEFAULT_ROTATION_SETTINGS.preferUntouched,
-		preferWeeklyReset:
-			typeof record?.preferWeeklyReset === "boolean"
-				? record.preferWeeklyReset
-				: DEFAULT_ROTATION_SETTINGS.preferWeeklyReset,
 		unknownResetCooldown: normalizeRotationCooldown(
 			record?.unknownResetCooldown,
 		),
@@ -97,7 +114,8 @@ function getRotationRecord(
 	}
 	if (
 		existing &&
-		("preferUntouched" in existing ||
+		("selectionStrategy" in existing ||
+			"preferUntouched" in existing ||
 			"preferWeeklyReset" in existing ||
 			"unknownResetCooldown" in existing ||
 			"preStreamRetryLimit" in existing)
@@ -133,8 +151,8 @@ export function formatRotationSummaryLines(
 	settings: RotationSettings,
 ): string[] {
 	return [
+		`rotation strategy: ${settings.selectionStrategy}`,
 		`prefer untouched: ${settings.preferUntouched ? "on" : "off"}`,
-		`prefer earliest weekly reset: ${settings.preferWeeklyReset ? "on" : "off"}`,
 		`unknown-reset fallback: ${settings.unknownResetCooldown}`,
 		`pre-stream retry limit: ${settings.preStreamRetryLimit}`,
 	];

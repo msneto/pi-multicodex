@@ -40,6 +40,7 @@
 		"index.ts",
 		"multicodex-controller.ts",
 		"rotation-settings.ts",
+		"report.ts",
 		"provider.ts",
 		"quota.ts",
 		"selection.ts",

@@ -228,14 +228,14 @@ describe("pickBestAccount", () => {
 		expect(selected?.email).toBe("sh01");
 	});
 
-	it("prefers earliest weekly reset when setting is enabled", () => {
+	it("prefers stable weekly burn when strategy is enabled", () => {
 		const accounts = [makeAccount("a"), makeAccount("b")];
 		const usage = new Map([
 			[
 				"a",
 				{
-					primary: { usedPercent: 90, resetAt: 5000 },
-					secondary: { usedPercent: 80, resetAt: 6000 },
+					primary: { usedPercent: 40, resetAt: 5000 },
+					secondary: { usedPercent: 90, resetAt: 24 * 60 * 60 * 1000 },
 					fetchedAt: 0,
 				},
 			],
@@ -243,7 +243,7 @@ describe("pickBestAccount", () => {
 				"b",
 				{
 					primary: { usedPercent: 5, resetAt: 5000 },
-					secondary: { usedPercent: 10, resetAt: 9000 },
+					secondary: { usedPercent: 10, resetAt: 6 * 24 * 60 * 60 * 1000 },
 					fetchedAt: 0,
 				},
 			],
@@ -253,11 +253,11 @@ describe("pickBestAccount", () => {
 			now: 0,
 			rotation: {
 				...DEFAULT_ROTATION_SETTINGS,
-				preferWeeklyReset: true,
+				selectionStrategy: "stable-weekly",
 				preferUntouched: false,
 			},
 		});
-		expect(selected?.email).toBe("a");
+		expect(selected?.email).toBe("b");
 	});
 
 	it("falls back to available account when usage is unknown", () => {

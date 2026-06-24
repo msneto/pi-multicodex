@@ -10,11 +10,22 @@ describe("rotation settings", () => {
 	it("fills defaults from partial input", () => {
 		expect(
 			normalizeRotationSettings({
+				selectionStrategy: "stable-weekly",
+			}),
+		).toEqual({
+			...DEFAULT_ROTATION_SETTINGS,
+			selectionStrategy: "stable-weekly",
+		});
+	});
+
+	it("maps legacy weekly reset flag to stable weekly strategy", () => {
+		expect(
+			normalizeRotationSettings({
 				preferWeeklyReset: true,
 			}),
 		).toEqual({
 			...DEFAULT_ROTATION_SETTINGS,
-			preferWeeklyReset: true,
+			selectionStrategy: "stable-weekly",
 		});
 	});
 
@@ -27,10 +38,10 @@ describe("rotation settings", () => {
 	it("renders compact summary lines", () => {
 		const lines = formatRotationSummaryLines({
 			...DEFAULT_ROTATION_SETTINGS,
-			preferWeeklyReset: true,
+			selectionStrategy: "stable-weekly",
 		});
 
-		expect(lines).toContain("prefer earliest weekly reset: on");
+		expect(lines).toContain("rotation strategy: stable-weekly");
 		expect(lines).toContain("pre-stream retry limit: 5");
 	});
 });

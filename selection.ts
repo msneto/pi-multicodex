@@ -20,49 +20,63 @@ function pickRandomAccount(accounts: Account[]): Account | undefined {
 	return accounts[Math.floor(Math.random() * accounts.length)];
 }
 
+function withIndex<T>(items: T[]): Array<{ item: T; index: number }> {
+	return items.map((item, index) => ({ item, index }));
+}
+
 function pickLowestUsageAccount(
 	accounts: Account[],
 	usageByEmail: Map<string, CodexUsageSnapshot>,
 ): Account | undefined {
-	const candidates = accounts
-		.map((account) => {
+	const candidates = withIndex(accounts)
+		.map(({ item: account, index }) => {
 			const usage = usageByEmail.get(account.email);
 			return {
 				account,
 				usedPercent: getMaxUsedPercent(usage) ?? 100,
 				resetAt: getWeeklyResetAt(usage) ?? Number.MAX_SAFE_INTEGER,
+				index,
 			};
 		})
 		.sort((a, b) => {
-			// Primary: lowest usage first
 			const usageDiff = a.usedPercent - b.usedPercent;
 			if (usageDiff !== 0) return usageDiff;
-			// Tiebreaker: earliest weekly reset first
-			return a.resetAt - b.resetAt;
+			const resetDiff = a.resetAt - b.resetAt;
+			if (resetDiff !== 0) return resetDiff;
+			return a.index - b.index;
 		});
 
 	return candidates[0]?.account;
 }
 
-function pickEarliestResetAccount(
+function pickStableWeeklyAccount(
 	accounts: Account[],
 	usageByEmail: Map<string, CodexUsageSnapshot>,
+	now: number,
 ): Account | undefined {
-	const candidates = accounts
-		.map((account) => {
+	const candidates = withIndex(accounts)
+		.map(({ item: account, index }) => {
 			const usage = usageByEmail.get(account.email);
+			const usedPercent = usage?.secondary?.usedPercent ?? 100;
+			const resetAt = usage?.secondary?.resetAt ?? Number.MAX_SAFE_INTEGER;
+			const remainingFraction = Math.max(0, 1 - usedPercent / 100);
+			const hoursLeft = Math.max((resetAt - now) / 36e5, 0.01);
 			return {
 				account,
-				usedPercent: getMaxUsedPercent(usage) ?? 100,
-				resetAt: getWeeklyResetAt(usage) ?? Number.MAX_SAFE_INTEGER,
+				score: remainingFraction - hoursLeft / 168,
+				resetAt,
+				usedPercent,
+				index,
 			};
 		})
 		.sort((a, b) => {
+			const scoreDiff = b.score - a.score;
+			if (scoreDiff !== 0) return scoreDiff;
 			const resetDiff = a.resetAt - b.resetAt;
 			if (resetDiff !== 0) return resetDiff;
 			const usageDiff = a.usedPercent - b.usedPercent;
 			if (usageDiff !== 0) return usageDiff;
-			return 0;
+			return a.index - b.index;
 		});
 
 	return candidates[0]?.account;
@@ -103,9 +117,9 @@ export function pickBestAccount(
 		}
 	}
 
-	if (rotation.preferWeeklyReset) {
+	if (rotation.selectionStrategy === "stable-weekly") {
 		return (
-			pickEarliestResetAccount(candidates, usageByEmail) ??
+			pickStableWeeklyAccount(candidates, usageByEmail, now) ??
 			pickRandomAccount(candidates)
 		);
 	}

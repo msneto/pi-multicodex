@@ -10,6 +10,7 @@ function createStatusControllerMock() {
 		loadPreferences: vi.fn().mockResolvedValue(undefined),
 		runFooterCommand: vi.fn().mockResolvedValue(undefined),
 		runRotationCommand: vi.fn().mockResolvedValue(undefined),
+		runReportCommand: vi.fn().mockResolvedValue(undefined),
 		runVerifyCommand: vi.fn().mockResolvedValue(undefined),
 		runPathCommand: vi.fn().mockResolvedValue(undefined),
 		runResetCommand: vi.fn().mockResolvedValue(undefined),
@@ -70,6 +71,7 @@ describe("registerCommands", () => {
 		expect(subcommands?.map((item) => item.value)).toContain("use");
 		expect(subcommands?.map((item) => item.value)).toContain("refresh");
 		expect(subcommands?.map((item) => item.value)).toContain("reauth");
+		expect(subcommands?.map((item) => item.value)).toContain("report");
 
 		const useAccounts = commandOptions.getArgumentCompletions("use a");
 		expect(useAccounts).toEqual([
@@ -81,6 +83,22 @@ describe("registerCommands", () => {
 			value: "refresh alpha@example.com",
 			label: "alpha@example.com",
 		});
+	});
+
+	it("routes report subcommand to controller", async () => {
+		const registerCommand = vi.fn();
+		const controller = createStatusControllerMock();
+		registerCommands(
+			{ registerCommand } as never,
+			createAccountManagerMock(),
+			controller,
+		);
+		const commandOptions = registerCommand.mock.calls[0]?.[1] as {
+			handler: (args: string, ctx: unknown) => Promise<void>;
+		};
+		const ctx = { hasUI: true, ui: { notify: vi.fn(), select: vi.fn() } };
+		await commandOptions.handler("report", ctx as never);
+		expect(controller.runReportCommand).toHaveBeenCalledWith(ctx);
 	});
 
 	it("shows a non-interactive warning when no subcommand is provided", async () => {

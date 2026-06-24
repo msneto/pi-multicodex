@@ -23,7 +23,7 @@ import { formatResetAt, isUsageUntouched } from "./usage";
 const NO_ACCOUNTS_MESSAGE =
 	"No managed accounts found. Open /multicodex accounts to add one.";
 const HELP_TEXT =
-	"Usage: /multicodex [accounts [identifier]|use [identifier]|show|refresh [identifier|all]|reauth [identifier]|footer|rotation|verify|path|reset [manual|quota|all]|help]";
+	"Usage: /multicodex [accounts [identifier]|use [identifier]|show|refresh [identifier|all]|reauth [identifier]|footer|rotation|report|verify|path|reset [manual|quota|all]|help]";
 const SUBCOMMANDS = [
 	"accounts",
 	"use",
@@ -32,6 +32,7 @@ const SUBCOMMANDS = [
 	"reauth",
 	"footer",
 	"rotation",
+	"report",
 	"verify",
 	"path",
 	"reset",
@@ -770,6 +771,13 @@ async function runRotationSubcommand(
 	await statusController.runRotationCommand(ctx);
 }
 
+async function runReportSubcommand(
+	ctx: ExtensionCommandContext,
+	statusController: MultiCodexController,
+): Promise<void> {
+	await statusController.runReportCommand(ctx);
+}
+
 async function runVerifySubcommand(
 	ctx: ExtensionCommandContext,
 	statusController: MultiCodexController,
@@ -886,6 +894,10 @@ async function runSubcommand(
 		await runRotationSubcommand(ctx, statusController);
 		return;
 	}
+	if (subcommand === "report") {
+		await runReportSubcommand(ctx, statusController);
+		return;
+	}
 	if (subcommand === "verify") {
 		await runVerifySubcommand(ctx, statusController);
 		return;
@@ -914,6 +926,7 @@ async function openMainPanel(
 		"reauth: re-authenticate an account",
 		"footer: footer settings panel",
 		"rotation: current rotation behavior",
+		"report: active account and quota report",
 		"verify: runtime health checks",
 		"path: storage and settings locations",
 		"reset: clear manual or quota state",
@@ -945,7 +958,7 @@ export function registerCommands(
 ): void {
 	pi.registerCommand("multicodex", {
 		description:
-			"Manage MultiCodex accounts, health, rotation, and footer settings",
+			"Manage MultiCodex accounts, reports, health, rotation, and footer settings",
 		getArgumentCompletions: (argumentPrefix: string) =>
 			getCommandCompletions(argumentPrefix, accountManager),
 		handler: async (
