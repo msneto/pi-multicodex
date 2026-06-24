@@ -260,6 +260,71 @@ describe("pickBestAccount", () => {
 		expect(selected?.email).toBe("b");
 	});
 
+	it("prefers healthier 5h tier before weekly score", () => {
+		const accounts = [makeAccount("a"), makeAccount("b")];
+		const usage = new Map([
+			[
+				"a",
+				{
+					primary: { usedPercent: 20, resetAt: 5000 },
+					secondary: { usedPercent: 90, resetAt: 24 * 60 * 60 * 1000 },
+					fetchedAt: 0,
+				},
+			],
+			[
+				"b",
+				{
+					primary: { usedPercent: 95, resetAt: 5000 },
+					secondary: { usedPercent: 10, resetAt: 6 * 24 * 60 * 60 * 1000 },
+					fetchedAt: 0,
+				},
+			],
+		]);
+
+		const selected = pickBestAccount(accounts, usage, {
+			now: 0,
+			rotation: {
+				...DEFAULT_ROTATION_SETTINGS,
+				selectionStrategy: "stable-weekly",
+				preferUntouched: false,
+			},
+		});
+		expect(selected?.email).toBe("a");
+	});
+
+	it("ignores 5h when weekly quota is zero", () => {
+		const accounts = [makeAccount("a"), makeAccount("b")];
+		const usage = new Map([
+			[
+				"a",
+				{
+					primary: { usedPercent: 0, resetAt: 5_000 },
+					secondary: { usedPercent: 100, resetAt: 10_000 },
+					fetchedAt: 0,
+				},
+			],
+			[
+				"b",
+				{
+					primary: { usedPercent: 90, resetAt: 5_000 },
+					secondary: { usedPercent: 10, resetAt: 10_000 },
+					fetchedAt: 0,
+				},
+			],
+		]);
+
+		const selected = pickBestAccount(accounts, usage, {
+			now: 0,
+			rotation: {
+				...DEFAULT_ROTATION_SETTINGS,
+				selectionStrategy: "stable-weekly",
+				preferUntouched: false,
+			},
+		});
+
+		expect(selected?.email).toBe("b");
+	});
+
 	it("falls back to available account when usage is unknown", () => {
 		const accounts = [makeAccount("a"), makeAccount("b")];
 		const selected = pickBestAccount(accounts, new Map(), { now: 0 });

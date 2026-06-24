@@ -1,5 +1,5 @@
 import type { AccountManager } from "./account-manager";
-import { isAccountAvailable, pickBestAccount } from "./selection";
+import { getStableWeeklyTier, hasWeeklyQuota, isAccountAvailable, pickBestAccount } from "./selection";
 import type { Account } from "./storage";
 import {
 	type CodexUsageSnapshot,
@@ -7,6 +7,11 @@ import {
 	getWeeklyResetAt,
 	isUsageUntouched,
 } from "./usage";
+import {
+	estimateUsagePace,
+	formatLookbackPaceLine,
+	loadUsageHistory,
+} from "./usage-history";
 
 function clampPercent(value: number): number {
 	return Math.min(100, Math.max(0, value));
@@ -199,6 +204,34 @@ function formatQuotaSnapshotSection(
 	}
 	return lines;
 }
+
+function formatUsagePaceSection(
+	accountManager: AccountManager,
+	accounts: Account[],
+	now: number,
+): string[] {
+	const history = loadUsageHistory();
+	const lines = ["usage pace:"];
+	for (const account of accounts) {
+		const activeTag = accountManager.getActiveAccount()?.email === account.email ? " [active]" : "";
+		lines.push(`  - ${account.email}${activeTag}`);
+		lines.push("    - 5h pace");
+		lines.push(
+			`      - ${formatLookbackPaceLine(
+				"5h",
+				estimateUsagePace(history, account.email, "primary", now),
+			)}`,
+		);
+		lines.push("    - 7d pace");
+		lines.push(
+			`      - ${formatLookbackPaceLine(
+				"7d",
+				estimateUsagePace(history, account.email, "secondary", now),
+			)}`,
+		);
+	}
+	return lines;
+}
 function sortLowestUsageAccounts(
 	accounts: Account[],
 	usageByEmail: Map<string, CodexUsageSnapshot>,
@@ -229,13 +262,21 @@ function sortLowestUsageAccounts(
 function scoreStableWeekly(
 	usage: CodexUsageSnapshot | undefined,
 	now: number,
-): { score: number; usedPercent: number; resetAt: number; hoursLeft: number } {
+): { tier: number; score: number; usedPercent: number; resetAt: number; hoursLeft: number } {
+	const tier = getStableWeeklyTier(usage);
 	const usedPercent = usage?.secondary?.usedPercent ?? 100;
 	const resetAt = usage?.secondary?.resetAt ?? Number.MAX_SAFE_INTEGER;
 	const remainingFraction = Math.max(0, 1 - usedPercent / 100);
 	const hoursLeft = Math.max((resetAt - now) / 3_600_000, 0.01);
 	const score = remainingFraction - hoursLeft / 168;
-	return { score, usedPercent, resetAt, hoursLeft };
+	return { tier, score, usedPercent, resetAt, hoursLeft };
+}
+
+function formatStableWeeklyTierLabel(tier: number): string {
+	if (tier === 0) return "5h healthy (>30% left)";
+	if (tier === 1) return "5h warm (10-30% left)";
+	if (tier === 2) return "5h hot (0-10% left)";
+	return "5h empty (0% left)";
 }
 
 function sortStableWeeklyAccounts(
@@ -245,6 +286,7 @@ function sortStableWeeklyAccounts(
 ): Array<{
 	account: Account;
 	index: number;
+	tier: number;
 	score: number;
 	usedPercent: number;
 	resetAt: number;
@@ -256,6 +298,8 @@ function sortStableWeeklyAccounts(
 			return { account, index, ...metrics };
 		})
 		.sort((a, b) => {
+			const tierDiff = a.tier - b.tier;
+			if (tierDiff !== 0) return tierDiff;
 			const scoreDiff = b.score - a.score;
 			if (scoreDiff !== 0) return scoreDiff;
 			const resetDiff = a.resetAt - b.resetAt;
@@ -303,16 +347,24 @@ function formatRankingDecisionSection(
 		rotation.preferUntouched && untouchedRankable.length > 0
 			? untouchedRankable
 			: availableWithUsage;
+	const stableRankable = rankable.filter((account) =>
+		hasWeeklyQuota(usageByEmail.get(account.email)),
+	);
 	const rankableEmailSet = new Set(rankable.map((account) => account.email));
+	const stableRankableEmailSet = new Set(
+		stableRankable.map((account) => account.email),
+	);
 	const mode = !activeAccount
 		? "none"
 		: manualAccount?.email === activeAccount.email
 			? "manual"
 			: accountManager.isPiAuthAccount(activeAccount)
 				? "pi-auth"
-				: availableWithUsage.length === 0
+				: rotation.selectionStrategy === "stable-weekly" && stableRankable.length === 0
 					? "random"
-					: rotation.selectionStrategy;
+					: availableWithUsage.length === 0
+						? "random"
+						: rotation.selectionStrategy;
 
 	const lines: string[] = ["decision:"];
 	if (!activeAccount) {
@@ -365,11 +417,9 @@ function formatRankingDecisionSection(
 	const lowestWinner = lowestRanking[0];
 	const stableRanking =
 		mode === "stable-weekly"
-			? sortStableWeeklyAccounts(rankable, usageByEmail, now)
+			? sortStableWeeklyAccounts(stableRankable, usageByEmail, now)
 			: [];
 	const stableWinner = stableRanking[0];
-	const stablePressure =
-		stableRanking.length > 0 && stableRanking.every((entry) => entry.score < 0);
 
 	for (const account of accounts) {
 		const usage = usageByEmail.get(account.email);
@@ -377,6 +427,7 @@ function formatRankingDecisionSection(
 		const isActive = activeAccount?.email === account.email;
 		const isSelected = selectedEmail === account.email;
 		const inRankable = rankableEmailSet.has(account.email);
+		const inStableRankable = stableRankableEmailSet.has(account.email);
 
 		lines.push(formatAccountHeader(accountManager, account, now));
 
@@ -502,15 +553,17 @@ function formatRankingDecisionSection(
 			continue;
 		}
 
-		if (!inRankable) {
+		if (!inStableRankable) {
 			lines.push(
 				formatAccountReasonLine(
-					rotation.preferUntouched &&
-						untouchedRankable.length > 0 &&
-						usage &&
-						!isUsageUntouched(usage)
-						? "lost: touched account, untouched account won"
-						: "lost: filtered out before stable-weekly ranking",
+					usage?.secondary?.usedPercent !== undefined && usage.secondary.usedPercent >= 100
+						? "lost: no weekly quota left, 5h ignored"
+						: rotation.preferUntouched &&
+							untouchedRankable.length > 0 &&
+							usage &&
+							!isUsageUntouched(usage)
+							? "lost: touched account, untouched account won"
+							: "lost: filtered out before stable-weekly ranking",
 				),
 			);
 			continue;
@@ -526,29 +579,34 @@ function formatRankingDecisionSection(
 			);
 			continue;
 		}
-		lines.push(formatAccountReasonLine(`score: ${entry.score.toFixed(3)}`));
+		lines.push(
+			formatAccountReasonLine(`5h tier: ${formatStableWeeklyTierLabel(entry.tier)}`),
+		);
+		lines.push(formatAccountReasonLine(`weekly score: ${entry.score.toFixed(3)}`));
 		lines.push(
 			formatAccountReasonLine(
-				`reset: ${formatCountdown(entry.resetAt)} (${entry.hoursLeft.toFixed(1)}h left)`,
+				`weekly reset: ${formatCountdown(entry.resetAt)} (${entry.hoursLeft.toFixed(1)}h left)`,
 			),
 		);
 		if (isSelected) {
 			lines.push(
 				formatAccountReasonLine(
-					stablePressure
-						? "why: highest weekly-burn score, but all candidates are under pressure"
-						: "why: highest weekly-burn score among rankable accounts",
+					"why: best 5h tier, then best weekly score among rankable accounts",
 				),
 			);
 		} else if (stableWinner) {
-			const scoreGap = stableWinner.score - entry.score;
-			lines.push(
-				formatAccountReasonLine(
-					stablePressure
-						? `lost: under pressure; winner is least-bad by ${scoreGap.toFixed(3)}`
-						: `lost: score is ${scoreGap.toFixed(3)} below winner`,
-				),
-			);
+			if (entry.tier !== stableWinner.tier) {
+				lines.push(
+					formatAccountReasonLine(`lost: worse 5h tier than winner`),
+				);
+			} else {
+				const scoreGap = stableWinner.score - entry.score;
+				lines.push(
+					formatAccountReasonLine(
+						`lost: same 5h tier, weekly score is ${scoreGap.toFixed(3)} below winner`,
+					),
+				);
+			}
 		}
 	}
 	return lines;
@@ -579,6 +637,8 @@ export function formatAccountReportLines(
 	const blockedLine = formatBlockedAccountsLine(accountManager, accounts);
 	return [
 		...formatQuotaSnapshotSection(accountManager, accounts),
+		"\u200B",
+		...formatUsagePaceSection(accountManager, accounts, now),
 		"\u200B",
 		...formatRankingDecisionSection(accountManager, accounts, now),
 

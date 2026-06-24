@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AccountManager } from "./account-manager";
 import { formatAccountReportLines } from "./report";
 import { DEFAULT_ROTATION_SETTINGS } from "./rotation-settings";
+import * as usageHistory from "./usage-history";
 
 const NOW = 1_700_000_000_000;
 
@@ -111,6 +112,32 @@ describe("formatAccountReportLines", () => {
 		expect(lines).toContain("why: lowest max usage among rankable accounts");
 		expect(lines).toContain("  - b@example.com");
 		expect(lines).toContain("lost: max used is 20% higher than winner");
+	});
+
+	it("shows usage pace tree per account", () => {
+		vi.spyOn(Date, "now").mockReturnValue(NOW);
+		vi.spyOn(usageHistory, "loadUsageHistory").mockReturnValue({
+			version: 1,
+			samples: [
+				{ ts: NOW - 60 * 60 * 1000, email: "a@example.com", primary: { usedPercent: 10 }, secondary: { usedPercent: 20 } },
+				{ ts: NOW - 30 * 60 * 1000, email: "a@example.com", primary: { usedPercent: 20 }, secondary: { usedPercent: 30 } },
+				{ ts: NOW - 10 * 60 * 1000, email: "a@example.com", primary: { usedPercent: 35 }, secondary: { usedPercent: 40 } },
+				{ ts: NOW - 5 * 60 * 1000, email: "a@example.com", primary: { usedPercent: 50 }, secondary: { usedPercent: 60 } },
+			],
+		});
+
+		const accountManager = createAccountManagerMock({
+			activeEmail: "a@example.com",
+		});
+
+		const lines = formatAccountReportLines(accountManager).join("\n");
+
+		expect(lines).toContain("usage pace:");
+		expect(lines).toContain("  - a@example.com [active]");
+		expect(lines).toContain("    - 5h pace");
+		expect(lines).toContain("      - 5h: ");
+		expect(lines).toContain("    - 7d pace");
+		expect(lines).toContain("      - 7d: ");
 	});
 
 	it("describes capacity as full-account equivalents", () => {
