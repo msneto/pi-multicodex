@@ -31,7 +31,7 @@ The current codebase is organized around these responsibilities:
   - persisted account state in `~/.pi/agent/codex-accounts.json`
   - resolves storage path through `@victor-software-house/pi-provider-utils/agent-paths`
 - `selection.ts`
-  - account selection logic (untouched preference, earliest weekly reset, random fallback)
+  - account selection logic (untouched preference, lowest-usage vs stable-weekly selection, random fallback)
 - `usage.ts` / `usage-client.ts`
   - usage data parsing and Codex API fetching
 - `quota.ts`
@@ -51,13 +51,14 @@ The current codebase is organized around these responsibilities:
   - `/multicodex use [identifier]`
   - `/multicodex footer`
   - `/multicodex rotation`
+  - `/multicodex report`
   - `/multicodex verify`
   - `/multicodex path`
   - `/multicodex reset [manual|quota|all]`
   - `/multicodex help`
 - Footer settings are persisted in `~/.pi/agent/settings.json` under `pi-multicodex`.
 - Shared provider mirroring, stream primitives, and agent-path helpers come from `@victor-software-house/pi-provider-utils`.
-- Rotation criteria are still hard-coded.
+- Rotation criteria are configurable via persisted selection strategy (`lowest-usage` default, `stable-weekly` option).
 
 ## Active roadmap priorities
 

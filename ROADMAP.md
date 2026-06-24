@@ -102,10 +102,10 @@ Outcome: the split command surface was replaced with one coherent operator API t
 
 - [x] Replace `/multicodex-use`, `/multicodex-status`, and `/multicodex-footer` with one `/multicodex` command family
 - [x] Make `/multicodex` with no arguments open the main interactive UI
-- [x] Add subcommands: `show`, `use`, `footer`, `rotation`, `verify`, `path`, `reset`, `help`
+- [x] Add subcommands: `show`, `use`, `footer`, `rotation`, `report`, `verify`, `path`, `reset`, `help`
 - [x] Add dynamic autocomplete for subcommands
 - [x] Add dynamic autocomplete for `/multicodex use <identifier>` from managed accounts
-- [x] Keep `show`, `verify`, `path`, `reset`, and `help` usable without opening a panel
+- [x] Keep `show`, `report`, `verify`, `path`, `reset`, and `help` usable without opening a panel
 - [x] Ensure non-interactive contexts return short operational messages instead of trying to open pickers or panels
 - [x] Remove references to `/login` from notifications and docs when MultiCodex owns the account flow directly
 - [x] Update tests to cover the new command-family behavior and autocomplete
@@ -218,11 +218,11 @@ Goal: make account rotation behavior explicit, configurable, and inspectable.
 
 ### Candidate settings to support
 
+- [x] selection strategy: lowest-usage or stable-weekly
 - [x] prefer untouched accounts
-- [x] prefer earliest weekly reset when multiple accounts are available
 - [x] configurable fallback cooldown when reset time is unknown
 - [x] configurable retry count for pre-stream quota rotation
-- [x] explicit enable or disable toggles for selection heuristics that are currently implicit
+- [x] explicit strategy selector instead of a weekly-reset toggle
 
 ### Rotation acceptance criteria
 
@@ -292,6 +292,8 @@ Outcome: extension health is inspectable and recoverable from the command family
 Goal: confirm runtime behavior stays correct as the command model and controller expand.
 
 ### Work items
+
+- [ ] Harden session lifecycle handling across `session_start`, `session_tree`, `turn_end`, `model_select`, and `session_shutdown` so manual override, footer state, and refresh timing stay aligned
 
 - [x] Review whether session restoration should also handle `session_tree`; fork flows already re-enter through `session_start`
 - [ ] Confirm manual override semantics remain correct across reloads and new sessions

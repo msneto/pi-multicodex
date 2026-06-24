@@ -25,7 +25,7 @@ When you start a session, MultiCodex:
 1. Imports your existing pi Codex auth automatically (if present).
 2. Merges duplicate imported credentials into the managed pool so one account does not consume multiple rotation slots.
 3. Checks usage data across all managed accounts.
-4. Picks the best available account — untouched accounts first, then the one whose weekly reset window ends soonest, then a random available account as fallback.
+4. Picks the best available account — untouched accounts first, then the configured rotation strategy (default lowest-usage; optional stable-weekly smooths weekly burn), then a random available account as fallback.
 
 If you pin a specific account from `/multicodex accounts` or `/multicodex use`, that account is used until it hits quota, fails auth validation, or you clear the override.
 
@@ -45,6 +45,7 @@ Everything lives under one command: `/multicodex`.
 | `/multicodex reauth [identifier]` | Re-authenticate one account explicitly |
 | `/multicodex footer` | Configure the usage footer display |
 | `/multicodex rotation` | Inspect and edit rotation settings |
+| `/multicodex report` | Show active account, why it was chosen, quota totals, and per-account status |
 | `/multicodex verify` | Check storage, settings, auth import, and reauth health |
 | `/multicodex path` | Print storage and settings file locations |
 | `/multicodex reset [manual\|quota\|all]` | Clear manual override, quota cooldowns, or both |
@@ -52,7 +53,7 @@ Everything lives under one command: `/multicodex`.
 
 All subcommands support dynamic autocomplete. Account-focused subcommands autocomplete from the managed account list.
 
-Commands that do not need a UI panel (`show`, `refresh`, `verify`, `path`, `reset`, `help`) work in non-interactive mode too.
+Commands that do not need a UI panel (`show`, `refresh`, `report`, `verify`, `path`, `reset`, `help`) work in non-interactive mode too.
 
 ## Account manager
 
@@ -86,7 +87,7 @@ You can customize which fields appear and their ordering with `/multicodex foote
 - **Auth import.** When pi has stored Codex OAuth credentials, MultiCodex imports them automatically and merges duplicate credentials into existing managed accounts when possible.
 - **Token refresh.** OAuth tokens are refreshed before expiry so requests do not fail due to stale credentials. You can also force a health refresh with `/multicodex refresh` or re-authenticate explicitly with `/multicodex reauth`.
 - **Usage tracking.** Usage data is fetched from the Codex API and cached for 5 minutes per account. The footer renders cached data immediately and refreshes in the background.
-- **Rotation settings.** The rotation panel persists untouched-account preference, earliest-reset preference, unknown-reset fallback cooldown, and pre-stream retry count in `settings.json`.
+- **Rotation settings.** The rotation panel persists selection strategy, untouched-account preference, unknown-reset fallback cooldown, and pre-stream retry count in `settings.json`.
 - **Quota cooldown.** When an account is exhausted, it stays on cooldown until its next known reset time (or 1 hour if the reset time is unknown).
 - **Shared utility seams.** Provider mirroring, stream primitives, and `~/.pi/agent/*` path helpers are shared with `pi-credential-vault` through `@victor-software-house/pi-provider-utils`. MultiCodex still owns account storage, token policy, footer behavior, and command UX.
 
