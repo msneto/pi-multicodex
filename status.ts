@@ -16,6 +16,7 @@ import {
 	writeJsonObjectFileAsync,
 } from "pi-provider-utils/agent-paths";
 import type { AccountManager } from "./account-manager";
+import { formatMulticodexError } from "./error-format";
 import { PROVIDER_ID } from "./provider";
 import type { CodexUsageSnapshot } from "./usage";
 
@@ -581,10 +582,7 @@ export function createUsageStatusController(accountManager: AccountManager) {
 			await ensurePreferencesLoaded();
 		} catch (error) {
 			preferences = DEFAULT_PREFERENCES;
-			ctx?.ui.notify(
-				`Multicodex: failed to load ${SETTINGS_FILE}: ${String(error)}`,
-				"warning",
-			);
+			ctx?.ui.notify(formatMulticodexError(`load ${SETTINGS_FILE}`, error), "warning");
 		}
 	}
 
@@ -602,10 +600,7 @@ export function createUsageStatusController(accountManager: AccountManager) {
 		ctx: ExtensionContext | ExtensionCommandContext | undefined,
 		error: unknown,
 	): void {
-		ctx?.ui.notify(
-			`Multicodex: failed to save footer settings: ${String(error)}`,
-			"warning",
-		);
+		ctx?.ui.notify(formatMulticodexError("save footer settings", error), "warning");
 	}
 
 	function processPreferenceSaves(): void {

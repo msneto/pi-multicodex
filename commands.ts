@@ -13,8 +13,8 @@ import {
 	truncateToWidth,
 	visibleWidth,
 } from "@earendil-works/pi-tui";
-import { normalizeUnknownError } from "pi-provider-utils/streams";
 import type { AccountManager } from "./account-manager";
+import { formatMulticodexError } from "./error-format";
 import { openLoginInBrowser } from "./browser";
 import type { MultiCodexController } from "./multicodex-controller";
 import type { Account } from "./storage";
@@ -243,7 +243,7 @@ async function loginAndActivateAccount(
 		ctx.ui.notify(`Now using ${account.email}`, "info");
 		return account.email;
 	} catch (error) {
-		ctx.ui.notify(`Login failed: ${normalizeUnknownError(error)}`, "error");
+		ctx.ui.notify(formatMulticodexError("login", error), "error");
 		return undefined;
 	}
 }
@@ -293,10 +293,7 @@ async function refreshSingleAccount(
 	try {
 		await accountManager.ensureValidToken(account);
 	} catch (error) {
-		ctx.ui.notify(
-			`refresh ${email}: ${normalizeUnknownError(error)}`,
-			"warning",
-		);
+		ctx.ui.notify(formatMulticodexError(`refresh ${email}`, error), "warning");
 		return;
 	}
 

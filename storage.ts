@@ -1,9 +1,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { z } from "zod";
-import { LEGACY_STORAGE_FILE, MULTICODEX_ACCOUNTS_FILE } from "./paths";
-
-// ---------------------------------------------------------------------------
+import { MULTICODEX_ACCOUNTS_FILE, LEGACY_STORAGE_FILE } from "./paths";
+import { formatMulticodexError } from "./error-format";
 // Schema
 // ---------------------------------------------------------------------------
 
@@ -153,9 +152,9 @@ function readStorageFile(filePath: string): StorageData | undefined {
 		}
 		return data;
 	} catch (error) {
-		console.error("Failed to load multicodex accounts:", error);
-		return undefined;
+		console.error(formatMulticodexError("load multicodex accounts", error));
 	}
+	return undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -191,6 +190,6 @@ export function saveStorage(data: StorageData): void {
 		};
 		fs.writeFileSync(STORAGE_FILE, JSON.stringify(output, null, 2));
 	} catch (error) {
-		console.error("Failed to save multicodex accounts:", error);
+		console.error(formatMulticodexError("save multicodex accounts", error));
 	}
 }

@@ -2,7 +2,7 @@ import type {
 	ExtensionAPI,
 	ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
-
+import { formatMulticodexError } from "./error-format";
 export async function openLoginInBrowser(
 	pi: ExtensionAPI,
 	ctx: ExtensionCommandContext,
@@ -29,6 +29,6 @@ export async function openLoginInBrowser(
 			"Could not open a browser automatically. Please open the login URL manually.",
 			"warning",
 		);
-		console.warn("[multicodex] Failed to open browser:", error);
+		console.warn(formatMulticodexError("open browser", error));
 	}
 }

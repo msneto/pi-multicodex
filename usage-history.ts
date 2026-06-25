@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { z } from "zod";
 import { MULTICODEX_USAGE_HISTORY_FILE } from "./paths";
+import { formatMulticodexError } from "./error-format";
 
 const CURRENT_VERSION = 1;
 const MAX_SAMPLE_AGE_MS = 24 * 60 * 60 * 1000;
@@ -116,7 +117,7 @@ function saveHistory(data: UsageHistoryData): void {
 			`${JSON.stringify(data, null, 2)}\n`,
 		);
 	} catch (error) {
-		console.error("Failed to save multicodex usage history:", error);
+		console.error(formatMulticodexError("save multicodex usage history", error));
 	}
 }
 

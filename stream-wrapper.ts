@@ -10,9 +10,9 @@ import {
 import {
 	createErrorAssistantMessage,
 	createLinkedAbortController,
-	normalizeUnknownError,
 	rewriteProviderOnEvent,
 } from "pi-provider-utils/streams";
+import { formatMulticodexError } from "./error-format";
 import type { AccountManager } from "./account-manager";
 import { isQuotaErrorMessage } from "./quota";
 
@@ -148,13 +148,12 @@ export function createStreamWrapper(
 					return;
 				}
 			} catch (error) {
-				const message = normalizeUnknownError(error);
 				const errorEvent: AssistantMessageEvent = {
 					type: "error",
 					reason: "error",
 					error: createErrorAssistantMessage(
 						model,
-						`Multicodex failed: ${message}`,
+						formatMulticodexError(`stream/${model.api}`, error),
 					),
 				};
 				stream.push(rewriteProviderOnEvent(errorEvent, model.provider));

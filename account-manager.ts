@@ -3,6 +3,7 @@ import {
 	refreshOpenAICodexToken,
 } from "@earendil-works/pi-ai/oauth";
 import { normalizeUnknownError } from "pi-provider-utils/streams";
+import { formatMulticodexError, formatMulticodexMessage } from "./error-format";
 import { loadImportedOpenAICodexAuth } from "./auth";
 import {
 	DEFAULT_ROTATION_SETTINGS,
@@ -117,7 +118,10 @@ export class AccountManager {
 			? "/login openai-codex"
 			: `/multicodex reauth ${account.email}`;
 		this.warningHandler?.(
-			`Multicodex skipped ${account.email} during rotation: ${normalizeUnknownError(error)}. Account is flagged in /multicodex accounts. Run ${hint} to repair it.`,
+			formatMulticodexMessage(
+				`rotation skipped ${account.email}`,
+				`${normalizeUnknownError(error)}. Account is flagged in /multicodex accounts. Run ${hint} to repair it.`,
+			),
 		);
 	}
 
@@ -392,9 +396,7 @@ export class AccountManager {
 			return usage;
 		} catch (error) {
 			this.warningHandler?.(
-				`Multicodex: failed to fetch usage for ${account.email}: ${normalizeUnknownError(
-					error,
-				)}`,
+				formatMulticodexError(`usage fetch ${account.email}`, error),
 			);
 			return undefined;
 		}
