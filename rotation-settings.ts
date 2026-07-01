@@ -1,35 +1,19 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { z } from "zod";
 import { LEGACY_SETTINGS_FILE, MULTICODEX_ROTATION_FILE } from "./paths";
-
-const RotationFileSchema = z
-	.object({
-		version: z.number().int().positive(),
-		rotation: z.unknown(),
-	})
-	.strict();
 
 const SETTINGS_KEY = "pi-multicodex";
 const SETTINGS_FILE = LEGACY_SETTINGS_FILE;
+const CURRENT_VERSION = 1;
 
-const SelectionStrategySchema = z.enum(["lowest-usage", "stable-weekly"]);
-const RotationCooldownSchema = z.enum(["15m", "1h", "6h"]);
-const RotationSettingsSchema = z
-	.object({
-		selectionStrategy: SelectionStrategySchema,
-		preferUntouched: z.boolean(),
-		unknownResetCooldown: RotationCooldownSchema,
-		preStreamRetryLimit: z.number().int().min(0).max(10),
-	})
-	.meta({
-		id: "RotationSettings",
-		description: "MultiCodex rotation settings",
-	});
-
-export type SelectionStrategy = z.infer<typeof SelectionStrategySchema>;
-export type RotationCooldown = z.infer<typeof RotationCooldownSchema>;
-export type RotationSettings = z.infer<typeof RotationSettingsSchema>;
+export type SelectionStrategy = "lowest-usage" | "stable-weekly";
+export type RotationCooldown = "15m" | "1h" | "6h";
+export interface RotationSettings {
+	selectionStrategy: SelectionStrategy;
+	preferUntouched: boolean;
+	unknownResetCooldown: RotationCooldown;
+	preStreamRetryLimit: number;
+}
 
 export const DEFAULT_ROTATION_SETTINGS: RotationSettings = {
 	selectionStrategy: "lowest-usage",
@@ -62,11 +46,9 @@ function normalizeSelectionStrategy(
 	if (value === "lowest-usage" || value === "stable-weekly") {
 		return value;
 	}
-
 	if (typeof legacyPreferWeeklyReset === "boolean") {
 		return legacyPreferWeeklyReset ? "stable-weekly" : "lowest-usage";
 	}
-
 	return DEFAULT_ROTATION_SETTINGS.selectionStrategy;
 }
 
@@ -81,9 +63,7 @@ export function normalizeRotationSettings(value: unknown): RotationSettings {
 			typeof record?.preferUntouched === "boolean"
 				? record.preferUntouched
 				: DEFAULT_ROTATION_SETTINGS.preferUntouched,
-		unknownResetCooldown: normalizeRotationCooldown(
-			record?.unknownResetCooldown,
-		),
+		unknownResetCooldown: normalizeRotationCooldown(record?.unknownResetCooldown),
 		preStreamRetryLimit:
 			typeof record?.preStreamRetryLimit === "number" &&
 			Number.isInteger(record.preStreamRetryLimit) &&
@@ -104,9 +84,7 @@ function readSettingsFile(): Record<string, unknown> {
 	}
 }
 
-function getRotationRecord(
-	settings: Record<string, unknown>,
-): Record<string, unknown> {
+function getRotationRecord(settings: Record<string, unknown>): Record<string, unknown> {
 	const existing = asObject(settings[SETTINGS_KEY]);
 	if (existing?.rotation && typeof existing.rotation === "object") {
 		return asObject(existing.rotation) ?? {};
@@ -127,12 +105,10 @@ function getRotationRecord(
 function readRotationFile(): RotationSettings | undefined {
 	if (!existsSync(MULTICODEX_ROTATION_FILE)) return undefined;
 	try {
-		const raw = JSON.parse(
-			readFileSync(MULTICODEX_ROTATION_FILE, "utf8"),
-		) as unknown;
-		const parsed = RotationFileSchema.safeParse(raw);
-		if (!parsed.success) return undefined;
-		return normalizeRotationSettings(parsed.data.rotation);
+		const raw = JSON.parse(readFileSync(MULTICODEX_ROTATION_FILE, "utf8")) as unknown;
+		const record = asObject(raw);
+		if (!record || record.version !== CURRENT_VERSION) return undefined;
+		return normalizeRotationSettings(record.rotation);
 	} catch {
 		return undefined;
 	}
@@ -159,10 +135,8 @@ export function loadRotationSettings(): RotationSettings {
 		return DEFAULT_ROTATION_SETTINGS;
 	}
 	const normalized = normalizeRotationSettings(rotation);
-	const data = RotationSettingsSchema.safeParse(normalized);
-	const result = data.success ? data.data : DEFAULT_ROTATION_SETTINGS;
-	writeRotationFile(result);
-	return result;
+	writeRotationFile(normalized);
+	return normalized;
 }
 
 export function persistRotationSettings(settingsValue: RotationSettings): void {
@@ -173,9 +147,7 @@ export function rotationCooldownToMs(value: RotationCooldown): number {
 	return ROTATION_COOLDOWN_MS[value];
 }
 
-export function formatRotationSummaryLines(
-	settings: RotationSettings,
-): string[] {
+export function formatRotationSummaryLines(settings: RotationSettings): string[] {
 	return [
 		`rotation strategy: ${settings.selectionStrategy}`,
 		`prefer untouched: ${settings.preferUntouched ? "on" : "off"}`,

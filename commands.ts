@@ -14,8 +14,8 @@ import {
 	visibleWidth,
 } from "@earendil-works/pi-tui";
 import type { AccountManager } from "./account-manager";
-import { formatMulticodexError } from "./error-format";
 import { openLoginInBrowser } from "./browser";
+import { formatMulticodexError } from "./error-format";
 import type { MultiCodexController } from "./multicodex-controller";
 import type { Account } from "./storage";
 import { formatResetAt, isUsageUntouched } from "./usage";

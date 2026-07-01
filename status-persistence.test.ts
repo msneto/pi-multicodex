@@ -13,7 +13,7 @@ let settings = {
 	},
 };
 
-vi.mock("pi-provider-utils/agent-paths", () => ({
+vi.mock("./paths", () => ({
 	getAgentSettingsPath: () => "/tmp/settings.json",
 	readJsonObjectFileAsync: vi.fn(async () => {
 		events.push("read");

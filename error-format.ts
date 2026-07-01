@@ -1,4 +1,4 @@
-import { normalizeUnknownError } from "pi-provider-utils/streams";
+import { normalizeUnknownError } from "./streams";
 
 export const MULTICODEX_ERROR_PREFIX = "[multicodex]";
 

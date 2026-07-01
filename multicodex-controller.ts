@@ -12,7 +12,7 @@ import {
 	SettingsList,
 	Text,
 } from "@earendil-works/pi-tui";
-import { getAgentSettingsPath } from "pi-provider-utils/agent-paths";
+import { getAgentSettingsPath } from "./paths";
 import type { AccountManager } from "./account-manager";
 import {
 	MULTICODEX_ROTATION_FILE,
@@ -264,7 +264,6 @@ export function createMultiCodexController(
 		accountManager.beginInitialization();
 		try {
 			await accountManager.loadPiAuth();
-			await accountManager.refreshUsageForAllAccounts({ force: true });
 
 			const needsReauth = accountManager.getAccountsNeedingReauth();
 			if (needsReauth.length > 0) {

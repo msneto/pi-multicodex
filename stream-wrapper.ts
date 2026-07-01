@@ -7,14 +7,14 @@ import {
 	type Model,
 	type SimpleStreamOptions,
 } from "@earendil-works/pi-ai";
+import type { AccountManager } from "./account-manager";
+import { formatMulticodexError } from "./error-format";
+import { isQuotaErrorMessage } from "./quota";
 import {
 	createErrorAssistantMessage,
 	createLinkedAbortController,
 	rewriteProviderOnEvent,
-} from "pi-provider-utils/streams";
-import { formatMulticodexError } from "./error-format";
-import type { AccountManager } from "./account-manager";
-import { isQuotaErrorMessage } from "./quota";
+} from "./streams";
 
 const DEFAULT_MAX_ROTATION_RETRIES = 5;
 

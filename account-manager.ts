@@ -2,9 +2,8 @@ import {
 	type OAuthCredentials,
 	refreshOpenAICodexToken,
 } from "@earendil-works/pi-ai/oauth";
-import { normalizeUnknownError } from "pi-provider-utils/streams";
-import { formatMulticodexError, formatMulticodexMessage } from "./error-format";
 import { loadImportedOpenAICodexAuth } from "./auth";
+import { formatMulticodexError, formatMulticodexMessage } from "./error-format";
 import {
 	DEFAULT_ROTATION_SETTINGS,
 	formatRotationSummaryLines,
@@ -20,6 +19,7 @@ import {
 	type StorageData,
 	saveStorage,
 } from "./storage";
+import { normalizeUnknownError } from "./streams";
 import { type CodexUsageSnapshot, getNextResetAt } from "./usage";
 import { fetchCodexUsage } from "./usage-client";
 import { appendUsageHistorySample } from "./usage-history";
