@@ -81,7 +81,12 @@ describe("usage history indexing", () => {
 			},
 		]);
 
-		const pace = estimateUsagePace(history, "a@example.com", "primary", 180_000);
+		const pace = estimateUsagePace(
+			history,
+			"a@example.com",
+			"primary",
+			180_000,
+		);
 
 		expect(pace?.currentUsedPercent).toBe(25);
 		expect(pace?.currentRemainingPercent).toBe(75);

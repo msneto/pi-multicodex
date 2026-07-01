@@ -63,7 +63,10 @@ type UsageHistoryLookupCacheEntry = {
 	lookup: UsageHistoryLookup;
 };
 
-const usageHistoryLookupCache = new WeakMap<UsageHistoryData, UsageHistoryLookupCacheEntry>();
+const usageHistoryLookupCache = new WeakMap<
+	UsageHistoryData,
+	UsageHistoryLookupCacheEntry
+>();
 
 function asObject(value: unknown): Record<string, unknown> | null {
 	if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -112,7 +115,7 @@ function normalizeHistory(value: unknown): UsageHistoryData {
 		? record.samples.flatMap((sample) => {
 				const normalized = normalizeSample(sample);
 				return normalized ? [normalized] : [];
-		  })
+			})
 		: [];
 	return { version: CURRENT_VERSION, samples };
 }
