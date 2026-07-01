@@ -7,6 +7,8 @@ const MAX_SAMPLE_AGE_MS = 24 * 60 * 60 * 1000;
 const MAX_SAMPLES_PER_EMAIL = 300;
 const LOOKBACKS_MS = [5 * 60 * 1000, 10 * 60 * 1000, 30 * 60 * 1000, 60 * 60 * 1000] as const;
 
+let cachedHistory: UsageHistoryData | undefined;
+
 export interface UsageWindow {
 	usedPercent?: number;
 	resetAt?: number;
@@ -96,6 +98,7 @@ function ensureDirectory(filePath: string): void {
 }
 
 function saveHistory(data: UsageHistoryData): void {
+	cachedHistory = data;
 	try {
 		ensureDirectory(MULTICODEX_USAGE_HISTORY_FILE);
 		fs.writeFileSync(MULTICODEX_USAGE_HISTORY_FILE, `${JSON.stringify(data, null, 2)}\n`);
@@ -105,14 +108,20 @@ function saveHistory(data: UsageHistoryData): void {
 }
 
 function readHistoryFile(): UsageHistoryData {
+	if (cachedHistory) {
+		return cachedHistory;
+	}
 	if (!fs.existsSync(MULTICODEX_USAGE_HISTORY_FILE)) {
-		return { version: CURRENT_VERSION, samples: [] };
+		cachedHistory = { version: CURRENT_VERSION, samples: [] };
+		return cachedHistory;
 	}
 	try {
 		const raw = JSON.parse(fs.readFileSync(MULTICODEX_USAGE_HISTORY_FILE, "utf8")) as unknown;
-		return normalizeHistory(raw);
+		cachedHistory = normalizeHistory(raw);
+		return cachedHistory;
 	} catch {
-		return { version: CURRENT_VERSION, samples: [] };
+		cachedHistory = { version: CURRENT_VERSION, samples: [] };
+		return cachedHistory;
 	}
 }
 
