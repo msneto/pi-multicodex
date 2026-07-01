@@ -15,38 +15,57 @@ export function isAccountAvailable(account: Account, now: number): boolean {
 	return !account.quotaExhaustedUntil || account.quotaExhaustedUntil <= now;
 }
 
-function pickRandomAccount(accounts: Account[]): Account | undefined {
-	if (accounts.length === 0) return undefined;
-	return accounts[Math.floor(Math.random() * accounts.length)];
+type LowestUsageCandidate = {
+	account: Account;
+	usedPercent: number;
+	resetAt: number;
+	index: number;
+};
+
+type StableWeeklyCandidate = {
+	account: Account;
+	tier: number;
+	score: number;
+	usedPercent: number;
+	resetAt: number;
+	hoursLeft: number;
+	index: number;
+};
+
+function isBetterLowestUsage(
+	candidate: LowestUsageCandidate,
+	best: LowestUsageCandidate | undefined,
+): boolean {
+	if (!best) return true;
+	if (candidate.usedPercent !== best.usedPercent) {
+		return candidate.usedPercent < best.usedPercent;
+	}
+	if (candidate.resetAt !== best.resetAt) {
+		return candidate.resetAt < best.resetAt;
+	}
+	return candidate.index < best.index;
 }
 
-function withIndex<T>(items: T[]): Array<{ item: T; index: number }> {
-	return items.map((item, index) => ({ item, index }));
+function isBetterStableWeekly(
+	candidate: StableWeeklyCandidate,
+	best: StableWeeklyCandidate | undefined,
+): boolean {
+	if (!best) return true;
+	if (candidate.tier !== best.tier) return candidate.tier < best.tier;
+	if (candidate.score !== best.score) return candidate.score > best.score;
+	if (candidate.resetAt !== best.resetAt) return candidate.resetAt < best.resetAt;
+	if (candidate.usedPercent !== best.usedPercent) {
+		return candidate.usedPercent < best.usedPercent;
+	}
+	return candidate.index < best.index;
 }
 
-function pickLowestUsageAccount(
-	accounts: Account[],
-	usageByEmail: Map<string, CodexUsageSnapshot>,
-): Account | undefined {
-	const candidates = withIndex(accounts)
-		.map(({ item: account, index }) => {
-			const usage = usageByEmail.get(account.email);
-			return {
-				account,
-				usedPercent: getMaxUsedPercent(usage) ?? 100,
-				resetAt: getWeeklyResetAt(usage) ?? Number.MAX_SAFE_INTEGER,
-				index,
-			};
-		})
-		.sort((a, b) => {
-			const usageDiff = a.usedPercent - b.usedPercent;
-			if (usageDiff !== 0) return usageDiff;
-			const resetDiff = a.resetAt - b.resetAt;
-			if (resetDiff !== 0) return resetDiff;
-			return a.index - b.index;
-		});
-
-	return candidates[0]?.account;
+function sampleReservoir<T>(
+	current: T | undefined,
+	item: T,
+	seen: number,
+): T {
+	return Math.random() < 1 / seen ? item : current ?? item;
 }
 
 export function getStableWeeklyTier(
@@ -69,55 +88,38 @@ export function hasWeeklyQuota(usage: CodexUsageSnapshot | undefined): boolean {
 	return typeof usedPercent === "number" && usedPercent < 100;
 }
 
-function pickStableWeeklyAccount(
-	accounts: Account[],
-	usageByEmail: Map<string, CodexUsageSnapshot>,
+function createLowestUsageCandidate(
+	account: Account,
+	usage: CodexUsageSnapshot | undefined,
+	index: number,
+): LowestUsageCandidate {
+	return {
+		account,
+		usedPercent: getMaxUsedPercent(usage) ?? 100,
+		resetAt: getWeeklyResetAt(usage) ?? Number.MAX_SAFE_INTEGER,
+		index,
+	};
+}
+
+function createStableWeeklyCandidate(
+	account: Account,
+	usage: CodexUsageSnapshot | undefined,
+	index: number,
 	now: number,
-): Account | undefined {
-	const weeklyCandidates = withIndex(accounts)
-		.map(({ item: account, index }) => {
-			const usage = usageByEmail.get(account.email);
-			return {
-				account,
-				weeklyAvailable: hasWeeklyQuota(usage),
-				tier: getStableWeeklyTier(usage),
-				usedPercent: usage?.secondary?.usedPercent ?? 100,
-				resetAt: usage?.secondary?.resetAt ?? Number.MAX_SAFE_INTEGER,
-				remainingFraction: Math.max(
-					0,
-					1 - (usage?.secondary?.usedPercent ?? 100) / 100,
-				),
-				hoursLeft: Math.max(
-					((usage?.secondary?.resetAt ?? Number.MAX_SAFE_INTEGER) - now) / 36e5,
-					0.01,
-				),
-				index,
-			};
-		})
-		.filter((candidate) => candidate.weeklyAvailable);
-
-	if (weeklyCandidates.length === 0) {
-		return pickRandomAccount(accounts);
-	}
-
-	const candidates = weeklyCandidates
-		.map(({ weeklyAvailable: _weeklyAvailable, ...candidate }) => ({
-			...candidate,
-			score: candidate.remainingFraction - candidate.hoursLeft / 168,
-		}))
-		.sort((a, b) => {
-			const tierDiff = a.tier - b.tier;
-			if (tierDiff !== 0) return tierDiff;
-			const scoreDiff = b.score - a.score;
-			if (scoreDiff !== 0) return scoreDiff;
-			const resetDiff = a.resetAt - b.resetAt;
-			if (resetDiff !== 0) return resetDiff;
-			const usageDiff = a.usedPercent - b.usedPercent;
-			if (usageDiff !== 0) return usageDiff;
-			return a.index - b.index;
-		});
-
-	return candidates[0]?.account;
+): StableWeeklyCandidate {
+	const usedPercent = usage?.secondary?.usedPercent ?? 100;
+	const resetAt = usage?.secondary?.resetAt ?? Number.MAX_SAFE_INTEGER;
+	const remainingFraction = Math.max(0, 1 - usedPercent / 100);
+	const hoursLeft = Math.max((resetAt - now) / 3_600_000, 0.01);
+	return {
+		account,
+		tier: getStableWeeklyTier(usage),
+		score: remainingFraction - hoursLeft / 168,
+		usedPercent,
+		resetAt,
+		hoursLeft,
+		index,
+	};
 }
 
 export function pickBestAccount(
@@ -131,39 +133,81 @@ export function pickBestAccount(
 ): Account | undefined {
 	const now = options?.now ?? Date.now();
 	const rotation = options?.rotation ?? DEFAULT_ROTATION_SETTINGS;
-	const available = accounts.filter(
-		(account) =>
-			isAccountAvailable(account, now) &&
-			!options?.excludeEmails?.has(account.email),
-	);
-	if (available.length === 0) return undefined;
+	let availableCount = 0;
+	let availableRandom: Account | undefined;
+	let withUsageCount = 0;
+	let withUsageRandom: Account | undefined;
+	let untouchedCount = 0;
+	let untouchedRandom: Account | undefined;
+	let bestLowestWithUsage: LowestUsageCandidate | undefined;
+	let bestLowestUntouched: LowestUsageCandidate | undefined;
+	let bestStableWithUsage: StableWeeklyCandidate | undefined;
+	let bestStableUntouched: StableWeeklyCandidate | undefined;
 
-	const withUsage = available.filter((account) =>
-		usageByEmail.has(account.email),
-	);
-	if (withUsage.length === 0) {
-		return pickRandomAccount(available);
-	}
+	for (let index = 0; index < accounts.length; index += 1) {
+		const account = accounts[index];
+		if (
+			!isAccountAvailable(account, now) ||
+			options?.excludeEmails?.has(account.email)
+		) {
+			continue;
+		}
 
-	let candidates = withUsage;
-	if (rotation.preferUntouched) {
-		const untouched = candidates.filter((account) =>
-			isUsageUntouched(usageByEmail.get(account.email)),
+		availableCount += 1;
+		availableRandom = sampleReservoir(availableRandom, account, availableCount);
+
+		const usage = usageByEmail.get(account.email);
+		if (!usage) continue;
+
+		withUsageCount += 1;
+		withUsageRandom = sampleReservoir(withUsageRandom, account, withUsageCount);
+
+		const lowestCandidate = createLowestUsageCandidate(account, usage, index);
+		if (isBetterLowestUsage(lowestCandidate, bestLowestWithUsage)) {
+			bestLowestWithUsage = lowestCandidate;
+		}
+
+		const untouched = isUsageUntouched(usage);
+		if (!untouched) continue;
+
+		untouchedCount += 1;
+		untouchedRandom = sampleReservoir(
+			untouchedRandom,
+			account,
+			untouchedCount,
 		);
-		if (untouched.length > 0) {
-			candidates = untouched;
+		if (isBetterLowestUsage(lowestCandidate, bestLowestUntouched)) {
+			bestLowestUntouched = lowestCandidate;
+		}
+
+		if (rotation.selectionStrategy === "stable-weekly") {
+			const stableCandidate = createStableWeeklyCandidate(
+				account,
+				usage,
+				index,
+				now,
+			);
+			if (hasWeeklyQuota(usage)) {
+				if (isBetterStableWeekly(stableCandidate, bestStableWithUsage)) {
+					bestStableWithUsage = stableCandidate;
+				}
+				if (isBetterStableWeekly(stableCandidate, bestStableUntouched)) {
+					bestStableUntouched = stableCandidate;
+				}
+			}
 		}
 	}
 
+	if (availableCount === 0) return undefined;
+	if (withUsageCount === 0) return availableRandom;
+
+	const useUntouched = rotation.preferUntouched && untouchedCount > 0;
 	if (rotation.selectionStrategy === "stable-weekly") {
-		return (
-			pickStableWeeklyAccount(candidates, usageByEmail, now) ??
-			pickRandomAccount(candidates)
-		);
+		const best = useUntouched ? bestStableUntouched : bestStableWithUsage;
+		if (best) return best.account;
+		return useUntouched ? untouchedRandom : withUsageRandom;
 	}
 
-	return (
-		pickLowestUsageAccount(candidates, usageByEmail) ??
-		pickRandomAccount(candidates)
-	);
+	const best = useUntouched ? bestLowestUntouched : bestLowestWithUsage;
+	return best?.account ?? (useUntouched ? untouchedRandom : withUsageRandom);
 }
