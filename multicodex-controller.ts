@@ -12,7 +12,7 @@ import {
 	SettingsList,
 	Text,
 } from "@earendil-works/pi-tui";
-import { getAgentSettingsPath } from "pi-provider-utils/agent-paths";
+import { getAgentSettingsPath } from "./paths";
 import type { AccountManager } from "./account-manager";
 import {
 	MULTICODEX_ROTATION_FILE,

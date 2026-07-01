@@ -14,7 +14,7 @@ import {
 	getAgentSettingsPath,
 	readJsonObjectFileAsync,
 	writeJsonObjectFileAsync,
-} from "pi-provider-utils/agent-paths";
+} from "./paths";
 import type { AccountManager } from "./account-manager";
 import { PROVIDER_ID } from "./provider";
 import type { CodexUsageSnapshot } from "./usage";

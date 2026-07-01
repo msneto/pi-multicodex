@@ -13,7 +13,7 @@ import {
 	truncateToWidth,
 	visibleWidth,
 } from "@earendil-works/pi-tui";
-import { normalizeUnknownError } from "pi-provider-utils/streams";
+import { normalizeUnknownError } from "./streams";
 import type { AccountManager } from "./account-manager";
 import { openLoginInBrowser } from "./browser";
 import type { MultiCodexController } from "./multicodex-controller";

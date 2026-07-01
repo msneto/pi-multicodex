@@ -2,7 +2,7 @@ import {
 	type OAuthCredentials,
 	refreshOpenAICodexToken,
 } from "@earendil-works/pi-ai/oauth";
-import { normalizeUnknownError } from "pi-provider-utils/streams";
+import { normalizeUnknownError } from "./streams";
 import { loadImportedOpenAICodexAuth } from "./auth";
 import {
 	DEFAULT_ROTATION_SETTINGS,
