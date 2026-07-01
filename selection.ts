@@ -53,19 +53,16 @@ function isBetterStableWeekly(
 	if (!best) return true;
 	if (candidate.tier !== best.tier) return candidate.tier < best.tier;
 	if (candidate.score !== best.score) return candidate.score > best.score;
-	if (candidate.resetAt !== best.resetAt) return candidate.resetAt < best.resetAt;
+	if (candidate.resetAt !== best.resetAt)
+		return candidate.resetAt < best.resetAt;
 	if (candidate.usedPercent !== best.usedPercent) {
 		return candidate.usedPercent < best.usedPercent;
 	}
 	return candidate.index < best.index;
 }
 
-function sampleReservoir<T>(
-	current: T | undefined,
-	item: T,
-	seen: number,
-): T {
-	return Math.random() < 1 / seen ? item : current ?? item;
+function sampleReservoir<T>(current: T | undefined, item: T, seen: number): T {
+	return Math.random() < 1 / seen ? item : (current ?? item);
 }
 
 export function getStableWeeklyTier(
@@ -171,11 +168,7 @@ export function pickBestAccount(
 		if (!untouched) continue;
 
 		untouchedCount += 1;
-		untouchedRandom = sampleReservoir(
-			untouchedRandom,
-			account,
-			untouchedCount,
-		);
+		untouchedRandom = sampleReservoir(untouchedRandom, account, untouchedCount);
 		if (isBetterLowestUsage(lowestCandidate, bestLowestUntouched)) {
 			bestLowestUntouched = lowestCandidate;
 		}
