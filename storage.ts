@@ -1,83 +1,42 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { z } from "zod";
 import { LEGACY_STORAGE_FILE, MULTICODEX_ACCOUNTS_FILE } from "./paths";
 
-// ---------------------------------------------------------------------------
-// Schema
-// ---------------------------------------------------------------------------
-
 const CURRENT_VERSION = 1;
-
 const SCHEMA_URL =
 	"https://raw.githubusercontent.com/victor-software-house/pi-multicodex/main/schemas/codex-accounts.schema.json";
 
-const AccountSchema = z
-	.object({
-		email: z.string().min(1).meta({ description: "Account email identifier" }),
-		accessToken: z
-			.string()
-			.min(1)
-			.meta({ description: "OAuth access token (JWT)" }),
-		refreshToken: z
-			.string()
-			.min(1)
-			.meta({ description: "OAuth refresh token" }),
-		expiresAt: z
-			.number()
-			.meta({ description: "Token expiry timestamp (ms since epoch)" }),
-		accountId: z.string().optional().meta({ description: "OpenAI account ID" }),
-		lastUsed: z
-			.number()
-			.optional()
-			.meta({ description: "Last manual selection timestamp (ms)" }),
-		quotaExhaustedUntil: z
-			.number()
-			.optional()
-			.meta({ description: "Quota cooldown expiry (ms)" }),
-		needsReauth: z
-			.boolean()
-			.optional()
-			.meta({ description: "Account needs re-authentication" }),
-	})
-	.meta({ id: "Account", description: "A managed OpenAI Codex account" });
+export interface Account {
+	email: string;
+	accessToken: string;
+	refreshToken: string;
+	expiresAt: number;
+	accountId?: string;
+	lastUsed?: number;
+	quotaExhaustedUntil?: number;
+	needsReauth?: boolean;
+}
 
-export const StorageSchema = z
-	.object({
-		$schema: z
-			.string()
-			.optional()
-			.meta({ description: "JSON Schema reference for editor support" }),
-		version: z
-			.number()
-			.int()
-			.positive()
-			.meta({ description: "Storage schema version" }),
-		accounts: z
-			.array(AccountSchema)
-			.meta({ description: "Managed account entries" }),
-		activeEmail: z
-			.string()
-			.optional()
-			.meta({ description: "Currently active account email" }),
-	})
-	.meta({
-		id: "MultiCodexStorage",
-		description: "MultiCodex managed account storage",
-	});
+export interface StorageData {
+	version: number;
+	accounts: Account[];
+	activeEmail?: string;
+}
 
-export type Account = z.infer<typeof AccountSchema>;
-export type StorageData = z.infer<typeof StorageSchema>;
+const LEGACY_FIELDS = ["importSource", "importMode", "importFingerprint"] as const;
 
-// ---------------------------------------------------------------------------
-// Migration
-// ---------------------------------------------------------------------------
+function asObject(value: unknown): Record<string, unknown> | null {
+	if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+	return value as Record<string, unknown>;
+}
 
-const LEGACY_FIELDS = [
-	"importSource",
-	"importMode",
-	"importFingerprint",
-] as const;
+function isString(value: unknown): value is string {
+	return typeof value === "string" && value.trim().length > 0;
+}
+
+function isNumber(value: unknown): value is number {
+	return typeof value === "number" && Number.isFinite(value);
+}
 
 function stripLegacyFields(raw: Record<string, unknown>): boolean {
 	let stripped = false;
@@ -90,14 +49,34 @@ function stripLegacyFields(raw: Record<string, unknown>): boolean {
 	return stripped;
 }
 
-function migrateRawStorage(raw: unknown): StorageData {
-	if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-		return { version: CURRENT_VERSION, accounts: [], activeEmail: undefined };
+function normalizeAccount(value: unknown): Account | undefined {
+	const record = asObject(value);
+	if (!record) return undefined;
+	const email = record.email;
+	const accessToken = record.accessToken;
+	const refreshToken = record.refreshToken;
+	const expiresAt = record.expiresAt;
+	if (!isString(email) || !isString(accessToken) || !isString(refreshToken) || !isNumber(expiresAt)) {
+		return undefined;
 	}
+	const account: Account = {
+		email,
+		accessToken,
+		refreshToken,
+		expiresAt,
+	};
+	if (isString(record.accountId)) account.accountId = record.accountId;
+	if (isNumber(record.lastUsed)) account.lastUsed = record.lastUsed;
+	if (isNumber(record.quotaExhaustedUntil)) account.quotaExhaustedUntil = record.quotaExhaustedUntil;
+	if (typeof record.needsReauth === "boolean") account.needsReauth = record.needsReauth;
+	return account;
+}
 
-	const record = raw as Record<string, unknown>;
+function migrateRawStorage(raw: unknown): StorageData {
+	const current: StorageData = { version: CURRENT_VERSION, accounts: [], activeEmail: undefined };
+	const record = asObject(raw);
+	if (!record) return current;
 
-	// Strip legacy import fields from each account
 	const rawAccounts = Array.isArray(record.accounts) ? record.accounts : [];
 	for (const entry of rawAccounts) {
 		if (entry && typeof entry === "object" && !Array.isArray(entry)) {
@@ -105,25 +84,12 @@ function migrateRawStorage(raw: unknown): StorageData {
 		}
 	}
 
-	// Add version if missing (pre-v1 files)
-	if (!("version" in record) || typeof record.version !== "number") {
-		record.version = CURRENT_VERSION;
-	}
-
-	const result = StorageSchema.safeParse(record);
-	if (result.success) {
-		return result.data;
-	}
-
-	// Schema validation failed — salvage what we can
-	const accounts: Account[] = [];
-	for (const entry of rawAccounts) {
-		const parsed = AccountSchema.safeParse(entry);
-		if (parsed.success) {
-			accounts.push(parsed.data);
-		}
-	}
-	return { version: CURRENT_VERSION, accounts, activeEmail: undefined };
+	const accounts = rawAccounts.flatMap((entry) => {
+		const parsed = normalizeAccount(entry);
+		return parsed ? [parsed] : [];
+	});
+	const activeEmail = isString(record.activeEmail) ? record.activeEmail : undefined;
+	return { version: CURRENT_VERSION, accounts, activeEmail };
 }
 
 function needsLegacyStrip(raw: Record<string, unknown>): boolean {
@@ -144,9 +110,7 @@ function readStorageFile(filePath: string): StorageData | undefined {
 		const text = fs.readFileSync(filePath, "utf-8");
 		const raw = JSON.parse(text) as Record<string, unknown>;
 		const needsMigration =
-			!("version" in raw) ||
-			raw.version !== CURRENT_VERSION ||
-			needsLegacyStrip(raw);
+			!("version" in raw) || raw.version !== CURRENT_VERSION || needsLegacyStrip(raw);
 		const data = migrateRawStorage(raw);
 		if (needsMigration && filePath === MULTICODEX_ACCOUNTS_FILE) {
 			saveStorage(data);
@@ -157,10 +121,6 @@ function readStorageFile(filePath: string): StorageData | undefined {
 		return undefined;
 	}
 }
-
-// ---------------------------------------------------------------------------
-// I/O
-// ---------------------------------------------------------------------------
 
 export const STORAGE_FILE = MULTICODEX_ACCOUNTS_FILE;
 
