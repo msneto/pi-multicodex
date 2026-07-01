@@ -63,7 +63,9 @@ export function normalizeRotationSettings(value: unknown): RotationSettings {
 			typeof record?.preferUntouched === "boolean"
 				? record.preferUntouched
 				: DEFAULT_ROTATION_SETTINGS.preferUntouched,
-		unknownResetCooldown: normalizeRotationCooldown(record?.unknownResetCooldown),
+		unknownResetCooldown: normalizeRotationCooldown(
+			record?.unknownResetCooldown,
+		),
 		preStreamRetryLimit:
 			typeof record?.preStreamRetryLimit === "number" &&
 			Number.isInteger(record.preStreamRetryLimit) &&
@@ -84,7 +86,9 @@ function readSettingsFile(): Record<string, unknown> {
 	}
 }
 
-function getRotationRecord(settings: Record<string, unknown>): Record<string, unknown> {
+function getRotationRecord(
+	settings: Record<string, unknown>,
+): Record<string, unknown> {
 	const existing = asObject(settings[SETTINGS_KEY]);
 	if (existing?.rotation && typeof existing.rotation === "object") {
 		return asObject(existing.rotation) ?? {};
@@ -105,7 +109,9 @@ function getRotationRecord(settings: Record<string, unknown>): Record<string, un
 function readRotationFile(): RotationSettings | undefined {
 	if (!existsSync(MULTICODEX_ROTATION_FILE)) return undefined;
 	try {
-		const raw = JSON.parse(readFileSync(MULTICODEX_ROTATION_FILE, "utf8")) as unknown;
+		const raw = JSON.parse(
+			readFileSync(MULTICODEX_ROTATION_FILE, "utf8"),
+		) as unknown;
 		const record = asObject(raw);
 		if (!record || record.version !== CURRENT_VERSION) return undefined;
 		return normalizeRotationSettings(record.rotation);
@@ -147,7 +153,9 @@ export function rotationCooldownToMs(value: RotationCooldown): number {
 	return ROTATION_COOLDOWN_MS[value];
 }
 
-export function formatRotationSummaryLines(settings: RotationSettings): string[] {
+export function formatRotationSummaryLines(
+	settings: RotationSettings,
+): string[] {
 	return [
 		`rotation strategy: ${settings.selectionStrategy}`,
 		`prefer untouched: ${settings.preferUntouched ? "on" : "off"}`,

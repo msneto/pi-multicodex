@@ -10,13 +10,13 @@ import {
 	SettingsList,
 	Text,
 } from "@earendil-works/pi-tui";
+import type { AccountManager } from "./account-manager";
+import { formatMulticodexError } from "./error-format";
 import {
 	getAgentSettingsPath,
 	readJsonObjectFileAsync,
 	writeJsonObjectFileAsync,
 } from "./paths";
-import type { AccountManager } from "./account-manager";
-import { formatMulticodexError } from "./error-format";
 import { PROVIDER_ID } from "./provider";
 import type { CodexUsageSnapshot } from "./usage";
 
@@ -116,7 +116,7 @@ function normalizePreferences(value: unknown): FooterPreferences {
 }
 
 async function readSettingsFile(): Promise<Record<string, unknown>> {
-	return readJsonObjectFileAsync(SETTINGS_FILE);
+	return (await readJsonObjectFileAsync(SETTINGS_FILE)) ?? {};
 }
 
 async function writeSettingsFile(
@@ -582,7 +582,10 @@ export function createUsageStatusController(accountManager: AccountManager) {
 			await ensurePreferencesLoaded();
 		} catch (error) {
 			preferences = DEFAULT_PREFERENCES;
-			ctx?.ui.notify(formatMulticodexError(`load ${SETTINGS_FILE}`, error), "warning");
+			ctx?.ui.notify(
+				formatMulticodexError(`load ${SETTINGS_FILE}`, error),
+				"warning",
+			);
 		}
 	}
 
@@ -600,7 +603,10 @@ export function createUsageStatusController(accountManager: AccountManager) {
 		ctx: ExtensionContext | ExtensionCommandContext | undefined,
 		error: unknown,
 	): void {
-		ctx?.ui.notify(formatMulticodexError("save footer settings", error), "warning");
+		ctx?.ui.notify(
+			formatMulticodexError("save footer settings", error),
+			"warning",
+		);
 	}
 
 	function processPreferenceSaves(): void {

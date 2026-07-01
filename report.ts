@@ -1,5 +1,10 @@
 import type { AccountManager } from "./account-manager";
-import { getStableWeeklyTier, hasWeeklyQuota, isAccountAvailable, pickBestAccount } from "./selection";
+import {
+	getStableWeeklyTier,
+	hasWeeklyQuota,
+	isAccountAvailable,
+	pickBestAccount,
+} from "./selection";
 import type { Account } from "./storage";
 import {
 	type CodexUsageSnapshot,
@@ -213,7 +218,10 @@ function formatUsagePaceSection(
 	const history = loadUsageHistory();
 	const lines = ["usage pace:"];
 	for (const account of accounts) {
-		const activeTag = accountManager.getActiveAccount()?.email === account.email ? " [active]" : "";
+		const activeTag =
+			accountManager.getActiveAccount()?.email === account.email
+				? " [active]"
+				: "";
 		lines.push(`  - ${account.email}${activeTag}`);
 		lines.push("    - 5h pace");
 		lines.push(
@@ -262,7 +270,13 @@ function sortLowestUsageAccounts(
 function scoreStableWeekly(
 	usage: CodexUsageSnapshot | undefined,
 	now: number,
-): { tier: number; score: number; usedPercent: number; resetAt: number; hoursLeft: number } {
+): {
+	tier: number;
+	score: number;
+	usedPercent: number;
+	resetAt: number;
+	hoursLeft: number;
+} {
 	const tier = getStableWeeklyTier(usage);
 	const usedPercent = usage?.secondary?.usedPercent ?? 100;
 	const resetAt = usage?.secondary?.resetAt ?? Number.MAX_SAFE_INTEGER;
@@ -360,7 +374,8 @@ function formatRankingDecisionSection(
 			? "manual"
 			: accountManager.isPiAuthAccount(activeAccount)
 				? "pi-auth"
-				: rotation.selectionStrategy === "stable-weekly" && stableRankable.length === 0
+				: rotation.selectionStrategy === "stable-weekly" &&
+						stableRankable.length === 0
 					? "random"
 					: availableWithUsage.length === 0
 						? "random"
@@ -556,12 +571,13 @@ function formatRankingDecisionSection(
 		if (!inStableRankable) {
 			lines.push(
 				formatAccountReasonLine(
-					usage?.secondary?.usedPercent !== undefined && usage.secondary.usedPercent >= 100
+					usage?.secondary?.usedPercent !== undefined &&
+						usage.secondary.usedPercent >= 100
 						? "lost: no weekly quota left, 5h ignored"
 						: rotation.preferUntouched &&
-							untouchedRankable.length > 0 &&
-							usage &&
-							!isUsageUntouched(usage)
+								untouchedRankable.length > 0 &&
+								usage &&
+								!isUsageUntouched(usage)
 							? "lost: touched account, untouched account won"
 							: "lost: filtered out before stable-weekly ranking",
 				),
@@ -580,9 +596,13 @@ function formatRankingDecisionSection(
 			continue;
 		}
 		lines.push(
-			formatAccountReasonLine(`5h tier: ${formatStableWeeklyTierLabel(entry.tier)}`),
+			formatAccountReasonLine(
+				`5h tier: ${formatStableWeeklyTierLabel(entry.tier)}`,
+			),
 		);
-		lines.push(formatAccountReasonLine(`weekly score: ${entry.score.toFixed(3)}`));
+		lines.push(
+			formatAccountReasonLine(`weekly score: ${entry.score.toFixed(3)}`),
+		);
 		lines.push(
 			formatAccountReasonLine(
 				`weekly reset: ${formatCountdown(entry.resetAt)} (${entry.hoursLeft.toFixed(1)}h left)`,
@@ -596,9 +616,7 @@ function formatRankingDecisionSection(
 			);
 		} else if (stableWinner) {
 			if (entry.tier !== stableWinner.tier) {
-				lines.push(
-					formatAccountReasonLine(`lost: worse 5h tier than winner`),
-				);
+				lines.push(formatAccountReasonLine(`lost: worse 5h tier than winner`));
 			} else {
 				const scoreGap = stableWinner.score - entry.score;
 				lines.push(

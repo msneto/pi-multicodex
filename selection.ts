@@ -49,7 +49,9 @@ function pickLowestUsageAccount(
 	return candidates[0]?.account;
 }
 
-export function getStableWeeklyTier(usage: CodexUsageSnapshot | undefined): number {
+export function getStableWeeklyTier(
+	usage: CodexUsageSnapshot | undefined,
+): number {
 	const usedPercent = usage?.primary?.usedPercent;
 	if (typeof usedPercent !== "number" || Number.isNaN(usedPercent)) {
 		return 3;
@@ -81,8 +83,14 @@ function pickStableWeeklyAccount(
 				tier: getStableWeeklyTier(usage),
 				usedPercent: usage?.secondary?.usedPercent ?? 100,
 				resetAt: usage?.secondary?.resetAt ?? Number.MAX_SAFE_INTEGER,
-				remainingFraction: Math.max(0, 1 - (usage?.secondary?.usedPercent ?? 100) / 100),
-				hoursLeft: Math.max(((usage?.secondary?.resetAt ?? Number.MAX_SAFE_INTEGER) - now) / 36e5, 0.01),
+				remainingFraction: Math.max(
+					0,
+					1 - (usage?.secondary?.usedPercent ?? 100) / 100,
+				),
+				hoursLeft: Math.max(
+					((usage?.secondary?.resetAt ?? Number.MAX_SAFE_INTEGER) - now) / 36e5,
+					0.01,
+				),
 				index,
 			};
 		})

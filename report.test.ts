@@ -119,10 +119,30 @@ describe("formatAccountReportLines", () => {
 		vi.spyOn(usageHistory, "loadUsageHistory").mockReturnValue({
 			version: 1,
 			samples: [
-				{ ts: NOW - 60 * 60 * 1000, email: "a@example.com", primary: { usedPercent: 10 }, secondary: { usedPercent: 20 } },
-				{ ts: NOW - 30 * 60 * 1000, email: "a@example.com", primary: { usedPercent: 20 }, secondary: { usedPercent: 30 } },
-				{ ts: NOW - 10 * 60 * 1000, email: "a@example.com", primary: { usedPercent: 35 }, secondary: { usedPercent: 40 } },
-				{ ts: NOW - 5 * 60 * 1000, email: "a@example.com", primary: { usedPercent: 50 }, secondary: { usedPercent: 60 } },
+				{
+					ts: NOW - 60 * 60 * 1000,
+					email: "a@example.com",
+					primary: { usedPercent: 10 },
+					secondary: { usedPercent: 20 },
+				},
+				{
+					ts: NOW - 30 * 60 * 1000,
+					email: "a@example.com",
+					primary: { usedPercent: 20 },
+					secondary: { usedPercent: 30 },
+				},
+				{
+					ts: NOW - 10 * 60 * 1000,
+					email: "a@example.com",
+					primary: { usedPercent: 35 },
+					secondary: { usedPercent: 40 },
+				},
+				{
+					ts: NOW - 5 * 60 * 1000,
+					email: "a@example.com",
+					primary: { usedPercent: 50 },
+					secondary: { usedPercent: 60 },
+				},
 			],
 		});
 

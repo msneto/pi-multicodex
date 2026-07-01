@@ -1,12 +1,17 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { MULTICODEX_USAGE_HISTORY_FILE } from "./paths";
 import { formatMulticodexError } from "./error-format";
+import { MULTICODEX_USAGE_HISTORY_FILE } from "./paths";
 
 const CURRENT_VERSION = 1;
 const MAX_SAMPLE_AGE_MS = 24 * 60 * 60 * 1000;
 const MAX_SAMPLES_PER_EMAIL = 300;
-const LOOKBACKS_MS = [5 * 60 * 1000, 10 * 60 * 1000, 30 * 60 * 1000, 60 * 60 * 1000] as const;
+const LOOKBACKS_MS = [
+	5 * 60 * 1000,
+	10 * 60 * 1000,
+	30 * 60 * 1000,
+	60 * 60 * 1000,
+] as const;
 const HISTORY_WRITE_DEBOUNCE_MS = 2_000;
 
 let cachedHistory: UsageHistoryData | undefined;
@@ -61,7 +66,8 @@ function normalizeWindow(value: unknown): UsageWindow | undefined {
 	const record = asObject(value);
 	if (!record) return undefined;
 	const window: UsageWindow = {};
-	if (isFiniteNumber(record.usedPercent)) window.usedPercent = record.usedPercent;
+	if (isFiniteNumber(record.usedPercent))
+		window.usedPercent = record.usedPercent;
 	if (isFiniteNumber(record.resetAt)) window.resetAt = record.resetAt;
 	return Object.keys(window).length > 0 ? window : undefined;
 }
@@ -69,7 +75,11 @@ function normalizeWindow(value: unknown): UsageWindow | undefined {
 function normalizeSample(value: unknown): UsageHistorySample | undefined {
 	const record = asObject(value);
 	if (!record) return undefined;
-	if (!isFiniteNumber(record.ts) || typeof record.email !== "string" || !record.email.trim()) {
+	if (
+		!isFiniteNumber(record.ts) ||
+		typeof record.email !== "string" ||
+		!record.email.trim()
+	) {
 		return undefined;
 	}
 	const sample: UsageHistorySample = {
@@ -88,9 +98,9 @@ function normalizeHistory(value: unknown): UsageHistoryData {
 	if (!record) return { version: CURRENT_VERSION, samples: [] };
 	const samples = Array.isArray(record.samples)
 		? record.samples.flatMap((sample) => {
-			const normalized = normalizeSample(sample);
-			return normalized ? [normalized] : [];
-		})
+				const normalized = normalizeSample(sample);
+				return normalized ? [normalized] : [];
+			})
 		: [];
 	return { version: CURRENT_VERSION, samples };
 }
@@ -113,9 +123,14 @@ function flushHistoryWrite(): void {
 	cachedHistory = data;
 	try {
 		ensureDirectory(MULTICODEX_USAGE_HISTORY_FILE);
-		fs.writeFileSync(MULTICODEX_USAGE_HISTORY_FILE, `${JSON.stringify(data, null, 2)}\n`);
+		fs.writeFileSync(
+			MULTICODEX_USAGE_HISTORY_FILE,
+			`${JSON.stringify(data, null, 2)}\n`,
+		);
 	} catch (error) {
-		console.error(formatMulticodexError("save multicodex usage history", error));
+		console.error(
+			formatMulticodexError("save multicodex usage history", error),
+		);
 	}
 }
 
@@ -150,7 +165,9 @@ function readHistoryFile(): UsageHistoryData {
 		return cachedHistory;
 	}
 	try {
-		const raw = JSON.parse(fs.readFileSync(MULTICODEX_USAGE_HISTORY_FILE, "utf8")) as unknown;
+		const raw = JSON.parse(
+			fs.readFileSync(MULTICODEX_USAGE_HISTORY_FILE, "utf8"),
+		) as unknown;
 		cachedHistory = normalizeHistory(raw);
 		return cachedHistory;
 	} catch {
@@ -159,7 +176,10 @@ function readHistoryFile(): UsageHistoryData {
 	}
 }
 
-function pruneSamples(samples: UsageHistorySample[], now: number): UsageHistorySample[] {
+function pruneSamples(
+	samples: UsageHistorySample[],
+	now: number,
+): UsageHistorySample[] {
 	const minTs = now - MAX_SAMPLE_AGE_MS;
 	const byEmail = new Map<string, UsageHistorySample[]>();
 	for (const sample of samples) {
@@ -172,14 +192,20 @@ function pruneSamples(samples: UsageHistorySample[], now: number): UsageHistoryS
 	const pruned: UsageHistorySample[] = [];
 	for (const list of byEmail.values()) {
 		list.sort((a, b) => a.ts - b.ts);
-		const trimmed = list.length > MAX_SAMPLES_PER_EMAIL ? list.slice(list.length - MAX_SAMPLES_PER_EMAIL) : list;
+		const trimmed =
+			list.length > MAX_SAMPLES_PER_EMAIL
+				? list.slice(list.length - MAX_SAMPLES_PER_EMAIL)
+				: list;
 		pruned.push(...trimmed);
 	}
 
 	return pruned.sort((a, b) => a.ts - b.ts || a.email.localeCompare(b.email));
 }
 
-function getWindowUsedPercent(sample: UsageHistorySample, window: UsageWindowKey): number | undefined {
+function getWindowUsedPercent(
+	sample: UsageHistorySample,
+	window: UsageWindowKey,
+): number | undefined {
 	const usedPercent = sample[window]?.usedPercent;
 	return typeof usedPercent === "number" && Number.isFinite(usedPercent)
 		? Math.min(100, Math.max(0, usedPercent))
@@ -193,8 +219,14 @@ function getWindowSamples(
 ): Array<{ ts: number; usedPercent: number }> {
 	return samples
 		.filter((sample) => sample.email === email)
-		.map((sample) => ({ ts: sample.ts, usedPercent: getWindowUsedPercent(sample, window) }))
-		.filter((sample): sample is { ts: number; usedPercent: number } => typeof sample.usedPercent === "number")
+		.map((sample) => ({
+			ts: sample.ts,
+			usedPercent: getWindowUsedPercent(sample, window),
+		}))
+		.filter(
+			(sample): sample is { ts: number; usedPercent: number } =>
+				typeof sample.usedPercent === "number",
+		)
 		.sort((a, b) => a.ts - b.ts);
 }
 
@@ -233,7 +265,9 @@ export function loadUsageHistory(): UsageHistoryData {
 	return readHistoryFile();
 }
 
-export function appendUsageHistorySample(sample: UsageHistorySample): UsageHistoryData {
+export function appendUsageHistorySample(
+	sample: UsageHistorySample,
+): UsageHistoryData {
 	const data = readHistoryFile();
 	data.samples.push(sample);
 	const pruned = { ...data, samples: pruneSamples(data.samples, sample.ts) };
@@ -241,8 +275,13 @@ export function appendUsageHistorySample(sample: UsageHistorySample): UsageHisto
 	return pruned;
 }
 
-export function getUsageHistorySamplesForAccount(data: UsageHistoryData, email: string): UsageHistorySample[] {
-	return data.samples.filter((sample) => sample.email === email).sort((a, b) => a.ts - b.ts);
+export function getUsageHistorySamplesForAccount(
+	data: UsageHistoryData,
+	email: string,
+): UsageHistorySample[] {
+	return data.samples
+		.filter((sample) => sample.email === email)
+		.sort((a, b) => a.ts - b.ts);
 }
 
 export function estimateUsagePace(
@@ -260,12 +299,16 @@ export function estimateUsagePace(
 	}));
 	const burnRatePerHour = Math.max(
 		0,
-		...lookbacks.flatMap((entry) => (typeof entry.ratePerHour === "number" ? [entry.ratePerHour] : [])),
+		...lookbacks.flatMap((entry) =>
+			typeof entry.ratePerHour === "number" ? [entry.ratePerHour] : [],
+		),
 	);
 	const latest = windowSamples[windowSamples.length - 1];
 	const currentUsedPercent = latest?.usedPercent;
 	const currentRemainingPercent =
-		typeof currentUsedPercent === "number" ? Math.max(0, 100 - currentUsedPercent) : undefined;
+		typeof currentUsedPercent === "number"
+			? Math.max(0, 100 - currentUsedPercent)
+			: undefined;
 	const runwayHours =
 		typeof currentRemainingPercent === "number" && burnRatePerHour > 0
 			? currentRemainingPercent / burnRatePerHour
@@ -284,10 +327,16 @@ export function estimateUsagePace(
 	};
 }
 
-export function formatLookbackPaceLine(label: string, pace: PaceEstimate | undefined): string {
+export function formatLookbackPaceLine(
+	label: string,
+	pace: PaceEstimate | undefined,
+): string {
 	if (!pace) return `${label}: unknown`;
 	const lookbacks = pace.lookbacks
-		.map((entry) => `${Math.round(entry.lookbackMs / 60000)}m ${formatLookbackRate(entry.ratePerHour)}`)
+		.map(
+			(entry) =>
+				`${Math.round(entry.lookbackMs / 60000)}m ${formatLookbackRate(entry.ratePerHour)}`,
+		)
 		.join(", ");
 	return `${label}: ${lookbacks}; burn now ${formatLookbackRate(pace.burnRatePerHour)}; runway ${formatRunwayHours(pace.runwayHours)}`;
 }

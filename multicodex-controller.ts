@@ -12,9 +12,9 @@ import {
 	SettingsList,
 	Text,
 } from "@earendil-works/pi-tui";
-import { getAgentSettingsPath } from "./paths";
 import type { AccountManager } from "./account-manager";
 import {
+	getAgentSettingsPath,
 	MULTICODEX_ROTATION_FILE,
 	MULTICODEX_USAGE_HISTORY_FILE,
 } from "./paths";
