@@ -88,6 +88,33 @@ describe("formatAccountReportLines", () => {
 		expect(lines).toContain("  - b@example.com");
 	});
 
+	it("explains stable-weekly random fallback when weekly quota is exhausted", () => {
+		vi.spyOn(Date, "now").mockReturnValue(NOW);
+		const accountManager = createAccountManagerMock({
+			activeEmail: "a@example.com",
+			rotation: { ...DEFAULT_ROTATION_SETTINGS, selectionStrategy: "stable-weekly" },
+			usage: {
+				"a@example.com": {
+					primary: { usedPercent: 10, resetAt: NOW + 60_000 },
+					secondary: { usedPercent: 100, resetAt: NOW + 120_000 },
+				},
+				"b@example.com": {
+					primary: { usedPercent: 20, resetAt: NOW + 60_000 },
+					secondary: { usedPercent: 100, resetAt: NOW + 120_000 },
+				},
+			},
+		});
+
+		const lines = formatAccountReportLines(accountManager).join("\n");
+
+		expect(lines).toContain("active: a@example.com (random fallback)");
+		expect(lines).toContain(
+			"reason: stable-weekly had no weekly-quota candidates, so rotation fell back to random",
+		);
+		expect(lines).toContain("  - a@example.com [active]");
+		expect(lines).toContain("why: random fallback picked this eligible account");
+	});
+
 	it("explains every account when lowest-usage picks active", () => {
 		vi.spyOn(Date, "now").mockReturnValue(NOW);
 		const accountManager = createAccountManagerMock({
@@ -180,6 +207,19 @@ describe("formatAccountReportLines", () => {
 		expect(lines).toContain("capacity estimate:");
 		expect(lines).toContain("  - 5h: ~2 accounts, reset 1m");
 		expect(lines).toContain("  - 7d: ~2 accounts, reset 2m");
+	});
+
+	it("shows unknown capacity without usage snapshots", () => {
+		vi.spyOn(Date, "now").mockReturnValue(NOW);
+		const accountManager = createAccountManagerMock({
+			usage: {},
+		});
+
+		const lines = formatAccountReportLines(accountManager).join("\n");
+
+		expect(lines).toContain("capacity estimate:");
+		expect(lines).toContain("  - 5h: unknown");
+		expect(lines).toContain("  - 7d: unknown");
 	});
 
 	it("shows hierarchical quota snapshot", () => {

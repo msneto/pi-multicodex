@@ -71,11 +71,35 @@ describe("formatActiveAccountStatus", () => {
 		);
 
 		expect(text).toContain("arte@galinhap…");
-		expect(text).toContain(" / 5h 3h15 75%");
-		expect(text).toContain(" / 7d 5d4h15 40%");
+		expect(text).toContain(" / 5h 3h15m 75%");
+		expect(text).toContain(" / 7d 5d4h15m 40%");
 		expect(text).not.toContain("Codex");
 		expect(text).not.toContain("left");
 		expect(text).not.toContain("used");
+	});
+
+	it("renders minute-only countdowns with units", () => {
+		const ctx = createContext();
+		const now = Date.now();
+		const text = formatActiveAccountStatus(
+			ctx,
+			"a@example.com",
+			{
+				primary: {
+					usedPercent: 50,
+					resetAt: now + 15 * 60 * 1000,
+				},
+				secondary: {
+					usedPercent: 25,
+					resetAt: now + 15 * 60 * 1000,
+				},
+				fetchedAt: 0,
+			},
+			defaultPreferences,
+		);
+
+		expect(text).toContain("5h 15m 50%");
+		expect(text).toContain("7d 15m 75%");
 	});
 
 	it("supports hiding the account and moving it after the usage fields", () => {
@@ -103,8 +127,8 @@ describe("formatActiveAccountStatus", () => {
 			},
 		);
 
-		expect(text).toContain("5h 3h15 10% used");
-		expect(text).toContain("7d 5d4h15 20% used");
+		expect(text).toContain("5h 3h15m 10% used");
+		expect(text).toContain("7d 5d4h15m 20% used");
 		expect(text).not.toContain("a@example.com");
 		expect(text).not.toContain("left");
 	});
@@ -132,8 +156,8 @@ describe("formatActiveAccountStatus", () => {
 		);
 
 		expect(text).toContain("[text:a@example.com]");
-		expect(text).toContain("[success:5h 3h15 75%]");
-		expect(text).toContain("[error:7d 5d4h15 5%]");
+		expect(text).toContain("[success:5h 3h15m 75%]");
+		expect(text).toContain("[error:7d 5d4h15m 5%]");
 		expect(text).toContain("[muted:|");
 	});
 
@@ -159,8 +183,8 @@ describe("formatActiveAccountStatus", () => {
 			{ ...defaultPreferences, usageMode: "used" },
 		);
 
-		expect(text).toContain("[thinkingMedium:5h 3h15 52% used]");
-		expect(text).toContain("[error:7d 5d4h15 96% used]");
+		expect(text).toContain("[thinkingMedium:5h 3h15m 52% used]");
+		expect(text).toContain("[error:7d 5d4h15m 96% used]");
 	});
 
 	it("uses muted loading text and dim unknown usage windows", () => {

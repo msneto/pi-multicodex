@@ -90,6 +90,9 @@ function formatCapacityWindowLine(
 		summary.soonestResetAt !== undefined
 			? `, reset ${formatCountdown(summary.soonestResetAt)}`
 			: "";
+	if (summary.knownCount === 0 && summary.unknownCount > 0) {
+		return `${label}: unknown${reset}`;
+	}
 	const equivalentAccounts = Math.round(summary.remainingTotal) / 100;
 	const equivalentLabel = Number.isInteger(equivalentAccounts)
 		? String(equivalentAccounts)
@@ -368,18 +371,18 @@ function formatRankingDecisionSection(
 	const stableRankableEmailSet = new Set(
 		stableRankable.map((account) => account.email),
 	);
+	const stableWeeklyRandomFallback =
+		rotation.selectionStrategy === "stable-weekly" && stableRankable.length === 0;
+	const randomFallbackBecauseNoUsage = availableWithUsage.length === 0;
 	const mode = !activeAccount
 		? "none"
 		: manualAccount?.email === activeAccount.email
 			? "manual"
 			: accountManager.isPiAuthAccount(activeAccount)
 				? "pi-auth"
-				: rotation.selectionStrategy === "stable-weekly" &&
-						stableRankable.length === 0
+				: stableWeeklyRandomFallback || randomFallbackBecauseNoUsage
 					? "random"
-					: availableWithUsage.length === 0
-						? "random"
-						: rotation.selectionStrategy;
+					: rotation.selectionStrategy;
 
 	const lines: string[] = ["decision:"];
 	if (!activeAccount) {
@@ -396,7 +399,9 @@ function formatRankingDecisionSection(
 	} else if (mode === "random") {
 		lines.push(`  - active: ${activeAccount.email} (random fallback)`);
 		lines.push(
-			"  - reason: no cached usage for available accounts, so rotation could not rank them",
+			stableWeeklyRandomFallback && !randomFallbackBecauseNoUsage
+				? "  - reason: stable-weekly had no weekly-quota candidates, so rotation fell back to random"
+				: "  - reason: no cached usage for available accounts, so rotation could not rank them",
 		);
 	} else {
 		lines.push(`  - active: ${activeAccount.email}`);

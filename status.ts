@@ -224,12 +224,12 @@ function formatResetCountdown(resetAt: number | undefined): string | undefined {
 	const minutes = Math.floor((totalSeconds % 3_600) / 60);
 	const seconds = totalSeconds % 60;
 	if (days > 0) {
-		return minutes > 0 ? `${days}d${hours}h${minutes}` : `${days}d${hours}h`;
+		return minutes > 0 ? `${days}d${hours}h${minutes}m` : `${days}d${hours}h`;
 	}
 	if (hours > 0) {
-		return minutes > 0 ? `${hours}h${minutes}` : `${hours}h`;
+		return minutes > 0 ? `${hours}h${minutes}m` : `${hours}h`;
 	}
-	if (minutes > 0) return `${minutes}`;
+	if (minutes > 0) return `${minutes}m`;
 	return `${seconds}s`;
 }
 
