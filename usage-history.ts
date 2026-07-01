@@ -6,8 +6,12 @@ const CURRENT_VERSION = 1;
 const MAX_SAMPLE_AGE_MS = 24 * 60 * 60 * 1000;
 const MAX_SAMPLES_PER_EMAIL = 300;
 const LOOKBACKS_MS = [5 * 60 * 1000, 10 * 60 * 1000, 30 * 60 * 1000, 60 * 60 * 1000] as const;
+const HISTORY_WRITE_DEBOUNCE_MS = 2_000;
 
 let cachedHistory: UsageHistoryData | undefined;
+let pendingHistoryWrite: UsageHistoryData | undefined;
+let historyWriteTimer: ReturnType<typeof setTimeout> | undefined;
+let historyExitHookInstalled = false;
 
 export interface UsageWindow {
 	usedPercent?: number;
@@ -97,7 +101,14 @@ function ensureDirectory(filePath: string): void {
 	}
 }
 
-function saveHistory(data: UsageHistoryData): void {
+function flushHistoryWrite(): void {
+	if (!pendingHistoryWrite) return;
+	const data = pendingHistoryWrite;
+	pendingHistoryWrite = undefined;
+	if (historyWriteTimer) {
+		clearTimeout(historyWriteTimer);
+		historyWriteTimer = undefined;
+	}
 	cachedHistory = data;
 	try {
 		ensureDirectory(MULTICODEX_USAGE_HISTORY_FILE);
@@ -105,6 +116,28 @@ function saveHistory(data: UsageHistoryData): void {
 	} catch (error) {
 		console.error("Failed to save multicodex usage history:", error);
 	}
+}
+
+function installHistoryExitHook(): void {
+	if (historyExitHookInstalled || typeof process === "undefined") return;
+	historyExitHookInstalled = true;
+	process.once("exit", () => {
+		flushHistoryWrite();
+	});
+}
+
+function saveHistory(data: UsageHistoryData): void {
+	cachedHistory = data;
+	pendingHistoryWrite = data;
+	installHistoryExitHook();
+	if (historyWriteTimer) {
+		clearTimeout(historyWriteTimer);
+	}
+	historyWriteTimer = setTimeout(() => {
+		historyWriteTimer = undefined;
+		flushHistoryWrite();
+	}, HISTORY_WRITE_DEBOUNCE_MS);
+	historyWriteTimer.unref?.();
 }
 
 function readHistoryFile(): UsageHistoryData {
