@@ -53,6 +53,18 @@ export interface PaceEstimate {
 	runwayHours?: number;
 }
 
+export type UsageHistoryLookup = {
+	samplesByEmail: Map<string, UsageHistorySample[]>;
+};
+
+type UsageHistoryLookupCacheEntry = {
+	samplesLength: number;
+	lastSample: UsageHistorySample | undefined;
+	lookup: UsageHistoryLookup;
+};
+
+const usageHistoryLookupCache = new WeakMap<UsageHistoryData, UsageHistoryLookupCacheEntry>();
+
 function asObject(value: unknown): Record<string, unknown> | null {
 	if (!value || typeof value !== "object" || Array.isArray(value)) return null;
 	return value as Record<string, unknown>;
@@ -100,7 +112,7 @@ function normalizeHistory(value: unknown): UsageHistoryData {
 		? record.samples.flatMap((sample) => {
 				const normalized = normalizeSample(sample);
 				return normalized ? [normalized] : [];
-			})
+		  })
 		: [];
 	return { version: CURRENT_VERSION, samples };
 }
@@ -212,6 +224,43 @@ function getWindowUsedPercent(
 		: undefined;
 }
 
+export function createUsageHistoryLookup(
+	data: UsageHistoryData,
+): UsageHistoryLookup {
+	const samplesByEmail = new Map<string, UsageHistorySample[]>();
+	for (const sample of data.samples) {
+		const samples = samplesByEmail.get(sample.email);
+		if (samples) {
+			samples.push(sample);
+		} else {
+			samplesByEmail.set(sample.email, [sample]);
+		}
+	}
+	for (const samples of samplesByEmail.values()) {
+		samples.sort((a, b) => a.ts - b.ts);
+	}
+	return { samplesByEmail };
+}
+
+function getUsageHistoryLookup(data: UsageHistoryData): UsageHistoryLookup {
+	const lastSample = data.samples[data.samples.length - 1];
+	const cached = usageHistoryLookupCache.get(data);
+	if (
+		cached &&
+		cached.samplesLength === data.samples.length &&
+		cached.lastSample === lastSample
+	) {
+		return cached.lookup;
+	}
+	const lookup = createUsageHistoryLookup(data);
+	usageHistoryLookupCache.set(data, {
+		samplesLength: data.samples.length,
+		lastSample,
+		lookup,
+	});
+	return lookup;
+}
+
 function getWindowSamples(
 	samples: UsageHistorySample[],
 	email: string,
@@ -230,16 +279,33 @@ function getWindowSamples(
 		.sort((a, b) => a.ts - b.ts);
 }
 
+function findFirstSampleAtOrAfter(
+	samples: Array<{ ts: number; usedPercent: number }>,
+	cutoff: number,
+): number {
+	let low = 0;
+	let high = samples.length;
+	while (low < high) {
+		const mid = Math.floor((low + high) / 2);
+		if (samples[mid].ts < cutoff) {
+			low = mid + 1;
+		} else {
+			high = mid;
+		}
+	}
+	return low;
+}
+
 function estimateLookbackRate(
 	samples: Array<{ ts: number; usedPercent: number }>,
 	lookbackMs: number,
 	now: number,
 ): number | undefined {
 	const cutoff = now - lookbackMs;
-	const windowSamples = samples.filter((sample) => sample.ts >= cutoff);
-	if (windowSamples.length < 2) return undefined;
-	const first = windowSamples[0];
-	const last = windowSamples[windowSamples.length - 1];
+	const startIndex = findFirstSampleAtOrAfter(samples, cutoff);
+	if (samples.length - startIndex < 2) return undefined;
+	const first = samples[startIndex];
+	const last = samples[samples.length - 1];
 	const elapsedHours = (last.ts - first.ts) / 3_600_000;
 	if (elapsedHours <= 0) return undefined;
 	const delta = last.usedPercent - first.usedPercent;
@@ -279,18 +345,20 @@ export function getUsageHistorySamplesForAccount(
 	data: UsageHistoryData,
 	email: string,
 ): UsageHistorySample[] {
-	return data.samples
-		.filter((sample) => sample.email === email)
-		.sort((a, b) => a.ts - b.ts);
+	return getUsageHistoryLookup(data).samplesByEmail.get(email)?.slice() ?? [];
 }
 
-export function estimateUsagePace(
-	data: UsageHistoryData,
+export function estimateUsagePaceFromLookup(
+	lookup: UsageHistoryLookup,
 	email: string,
 	window: UsageWindowKey,
 	now = Date.now(),
 ): PaceEstimate | undefined {
-	const windowSamples = getWindowSamples(data.samples, email, window);
+	const windowSamples = getWindowSamples(
+		lookup.samplesByEmail.get(email) ?? [],
+		email,
+		window,
+	);
 	if (windowSamples.length === 0) return undefined;
 
 	const lookbacks = LOOKBACKS_MS.map((lookbackMs) => ({
@@ -325,6 +393,20 @@ export function estimateUsagePace(
 		burnRatePerHour,
 		runwayHours,
 	};
+}
+
+export function estimateUsagePace(
+	data: UsageHistoryData,
+	email: string,
+	window: UsageWindowKey,
+	now = Date.now(),
+): PaceEstimate | undefined {
+	return estimateUsagePaceFromLookup(
+		getUsageHistoryLookup(data),
+		email,
+		window,
+		now,
+	);
 }
 
 export function formatLookbackPaceLine(
