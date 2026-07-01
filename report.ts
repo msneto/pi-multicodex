@@ -13,9 +13,11 @@ import {
 	isUsageUntouched,
 } from "./usage";
 import {
-	estimateUsagePace,
+	createUsageHistoryLookup,
+	estimateUsagePaceFromLookup,
 	formatLookbackPaceLine,
 	loadUsageHistory,
+	type UsageHistoryLookup,
 } from "./usage-history";
 
 function clampPercent(value: number): number {
@@ -55,12 +57,13 @@ function formatUsageLine(window?: {
 }
 
 function formatBlockedAccountsLine(
-	accountManager: AccountManager,
 	accounts: Account[],
+	usageByEmail: Map<string, CodexUsageSnapshot>,
 ): string | undefined {
-	const blockedAccounts = accounts.flatMap((account) => {
-		const usage = accountManager.getCachedUsage(account.email);
-		if (!usage) return [];
+	const blockedAccounts: string[] = [];
+	for (const account of accounts) {
+		const usage = usageByEmail.get(account.email);
+		if (!usage) continue;
 		const windows: string[] = [];
 		if (
 			typeof usage.primary?.usedPercent === "number" &&
@@ -74,10 +77,10 @@ function formatBlockedAccountsLine(
 		) {
 			windows.push("7d 0%");
 		}
-		return windows.length > 0
-			? [`${account.email} (${windows.join(", ")})`]
-			: [];
-	});
+		if (windows.length > 0) {
+			blockedAccounts.push(`${account.email} (${windows.join(", ")})`);
+		}
+	}
 	if (blockedAccounts.length === 0) return undefined;
 	return `blocked: ${blockedAccounts.join("; ")}`;
 }
@@ -104,27 +107,31 @@ function getReportTags(
 	accountManager: AccountManager,
 	account: Account,
 	now: number,
+	activeEmail: string | undefined,
+	manualEmail: string | undefined,
+	usageByEmail: Map<string, CodexUsageSnapshot>,
 ): string[] {
-	const usage = accountManager.getCachedUsage(account.email);
-	return [
-		accountManager.getActiveAccount()?.email === account.email
-			? "active"
-			: null,
-		accountManager.getManualAccount()?.email === account.email
-			? "manual"
-			: null,
+	const usage = usageByEmail.get(account.email);
+	const tags = [
+		activeEmail === account.email ? "active" : null,
+		manualEmail === account.email ? "manual" : null,
 		accountManager.isPiAuthAccount(account) ? "pi auth" : null,
 		account.needsReauth ? "needs reauth" : null,
 		account.quotaExhaustedUntil && account.quotaExhaustedUntil > now
 			? "quota"
 			: null,
 		isUsageUntouched(usage) ? "untouched" : null,
-	].filter((value): value is string => Boolean(value));
+	];
+	const filtered: string[] = [];
+	for (const tag of tags) {
+		if (tag) filtered.push(tag);
+	}
+	return filtered;
 }
 
 function summarizeWindow(
-	accountManager: AccountManager,
 	accounts: Account[],
+	usageByEmail: Map<string, CodexUsageSnapshot>,
 	window: "primary" | "secondary",
 	now: number,
 ): {
@@ -145,7 +152,7 @@ function summarizeWindow(
 	let soonestResetAt: number | undefined;
 
 	for (const account of available) {
-		const usage = accountManager.getCachedUsage(account.email);
+		const usage = usageByEmail.get(account.email);
 		const primaryUsed = usage?.primary?.usedPercent;
 		const secondaryUsed = usage?.secondary?.usedPercent;
 		const windowUsage =
@@ -194,13 +201,13 @@ function buildUsageIndex(
 }
 
 function formatQuotaSnapshotSection(
-	accountManager: AccountManager,
 	accounts: Account[],
+	activeEmail: string | undefined,
+	usageByEmail: Map<string, CodexUsageSnapshot>,
 ): string[] {
-	const activeEmail = accountManager.getActiveAccount()?.email;
 	const lines = ["quota snapshot:"];
 	for (const account of accounts) {
-		const usage = accountManager.getCachedUsage(account.email);
+		const usage = usageByEmail.get(account.email);
 		const activeTag = activeEmail === account.email ? " [active]" : "";
 		lines.push(`  - ${account.email}${activeTag}`);
 		if (!usage) {
@@ -214,30 +221,27 @@ function formatQuotaSnapshotSection(
 }
 
 function formatUsagePaceSection(
-	accountManager: AccountManager,
 	accounts: Account[],
+	lookup: UsageHistoryLookup,
 	now: number,
+	activeEmail: string | undefined,
 ): string[] {
-	const history = loadUsageHistory();
 	const lines = ["usage pace:"];
 	for (const account of accounts) {
-		const activeTag =
-			accountManager.getActiveAccount()?.email === account.email
-				? " [active]"
-				: "";
+		const activeTag = activeEmail === account.email ? " [active]" : "";
 		lines.push(`  - ${account.email}${activeTag}`);
 		lines.push("    - 5h pace");
 		lines.push(
 			`      - ${formatLookbackPaceLine(
 				"5h",
-				estimateUsagePace(history, account.email, "primary", now),
+				estimateUsagePaceFromLookup(lookup, account.email, "primary", now),
 			)}`,
 		);
 		lines.push("    - 7d pace");
 		lines.push(
 			`      - ${formatLookbackPaceLine(
 				"7d",
-				estimateUsagePace(history, account.email, "secondary", now),
+				estimateUsagePaceFromLookup(lookup, account.email, "secondary", now),
 			)}`,
 		);
 	}
@@ -331,8 +335,18 @@ function formatAccountHeader(
 	accountManager: AccountManager,
 	account: Account,
 	now: number,
+	activeEmail: string | undefined,
+	manualEmail: string | undefined,
+	usageByEmail: Map<string, CodexUsageSnapshot>,
 ): string {
-	const tags = getReportTags(accountManager, account, now);
+	const tags = getReportTags(
+		accountManager,
+		account,
+		now,
+		activeEmail,
+		manualEmail,
+		usageByEmail,
+	);
 	return `  - ${account.email}${tags.length > 0 ? ` [${tags.join(", ")}]` : ""}`;
 }
 
@@ -343,12 +357,12 @@ function formatAccountReasonLine(reason: string): string {
 function formatRankingDecisionSection(
 	accountManager: AccountManager,
 	accounts: Account[],
+	usageByEmail: Map<string, CodexUsageSnapshot>,
 	now: number,
+	activeAccount: Account | undefined,
+	manualAccount: Account | undefined,
 ): string[] {
 	const rotation = accountManager.getRotationPreferences();
-	const activeAccount = accountManager.getActiveAccount();
-	const manualAccount = accountManager.getManualAccount();
-	const usageByEmail = buildUsageIndex(accountManager, accounts);
 	const available = accounts.filter(
 		(account) => isAccountAvailable(account, now) && !account.needsReauth,
 	);
@@ -449,7 +463,16 @@ function formatRankingDecisionSection(
 		const inRankable = rankableEmailSet.has(account.email);
 		const inStableRankable = stableRankableEmailSet.has(account.email);
 
-		lines.push(formatAccountHeader(accountManager, account, now));
+		lines.push(
+			formatAccountHeader(
+				accountManager,
+				account,
+				now,
+				activeAccount?.email,
+				manualAccount?.email,
+				usageByEmail,
+			),
+		);
 
 		if (!eligible) {
 			lines.push(formatAccountReasonLine("skipped: not eligible right now"));
@@ -644,26 +667,43 @@ export function formatAccountReportLines(
 		return ["no managed accounts found"];
 	}
 
+	const usageByEmail = buildUsageIndex(accountManager, accounts);
+	const activeAccount = accountManager.getActiveAccount();
+	const manualAccount = accountManager.getManualAccount();
+	const historyLookup = createUsageHistoryLookup(loadUsageHistory());
+
 	const primarySummary = summarizeWindow(
-		accountManager,
 		accounts,
+		usageByEmail,
 		"primary",
 		now,
 	);
 	const secondarySummary = summarizeWindow(
-		accountManager,
 		accounts,
+		usageByEmail,
 		"secondary",
 		now,
 	);
 
-	const blockedLine = formatBlockedAccountsLine(accountManager, accounts);
+	const blockedLine = formatBlockedAccountsLine(accounts, usageByEmail);
 	return [
-		...formatQuotaSnapshotSection(accountManager, accounts),
+		...formatQuotaSnapshotSection(accounts, activeAccount?.email, usageByEmail),
 		"\u200B",
-		...formatUsagePaceSection(accountManager, accounts, now),
+		...formatUsagePaceSection(
+			accounts,
+			historyLookup,
+			now,
+			activeAccount?.email,
+		),
 		"\u200B",
-		...formatRankingDecisionSection(accountManager, accounts, now),
+		...formatRankingDecisionSection(
+			accountManager,
+			accounts,
+			usageByEmail,
+			now,
+			activeAccount,
+			manualAccount,
+		),
 
 		"\u200B",
 		"capacity estimate:",
