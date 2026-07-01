@@ -111,6 +111,7 @@ describe("createMultiCodexController", () => {
 		expect(accountManager.loadRotationPreferences).toHaveBeenCalledWith({
 			mocked: true,
 		});
+		expect(accountManager.refreshUsageForAllAccounts).not.toHaveBeenCalled();
 		expect(mocks.statusController.refreshFor).toHaveBeenCalledWith(ctx);
 	});
 });

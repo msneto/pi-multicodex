@@ -264,7 +264,6 @@ export function createMultiCodexController(
 		accountManager.beginInitialization();
 		try {
 			await accountManager.loadPiAuth();
-			await accountManager.refreshUsageForAllAccounts({ force: true });
 
 			const needsReauth = accountManager.getAccountsNeedingReauth();
 			if (needsReauth.length > 0) {
