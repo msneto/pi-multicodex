@@ -321,6 +321,68 @@ describe("createUsageStatusController", () => {
 		expect(refreshUsageForAccount).toHaveBeenCalledTimes(1);
 	});
 
+	it("cancels pending model-select refreshes when a session restarts", async () => {
+		vi.useFakeTimers();
+		const setStatus = vi.fn();
+		const refreshUsageForAccount = vi.fn().mockResolvedValue({
+			primary: { usedPercent: 10, resetAt: 1 },
+			secondary: { usedPercent: 20, resetAt: 2 },
+			fetchedAt: 0,
+		});
+		const controller = createUsageStatusController({
+			onStateChange: () => () => undefined,
+			getActiveAccount: () => ({ email: "a@example.com" }),
+			getCachedUsage: () => ({
+				primary: { usedPercent: 30, resetAt: 1 },
+				secondary: { usedPercent: 40, resetAt: 2 },
+				fetchedAt: 0,
+			}),
+			refreshUsageForAccount,
+		} as never);
+		const ctx = createContext({ setStatus });
+
+		controller.scheduleModelSelectRefresh(ctx);
+		controller.startAutoRefresh();
+
+		await vi.advanceTimersByTimeAsync(250);
+
+		expect(refreshUsageForAccount).not.toHaveBeenCalled();
+	});
+
+	it("drops stale refresh results after shutdown", async () => {
+		const setStatus = vi.fn();
+		let resolveRefresh: ((value: unknown) => void) | undefined;
+		const refreshUsageForAccount = vi.fn(
+			() =>
+				new Promise((resolve: (value: unknown) => void) => {
+					resolveRefresh = resolve;
+				}),
+		);
+		const controller = createUsageStatusController({
+			onStateChange: () => () => undefined,
+			getActiveAccount: () => ({ email: "a@example.com" }),
+			getCachedUsage: () => ({
+				primary: { usedPercent: 30, resetAt: 1 },
+				secondary: { usedPercent: 40, resetAt: 2 },
+				fetchedAt: 0,
+			}),
+			refreshUsageForAccount,
+		} as never);
+		const ctx = createContext({ setStatus });
+
+		const refreshPromise = controller.refreshFor(ctx);
+		expect(refreshUsageForAccount).toHaveBeenCalledOnce();
+		controller.stopAutoRefresh(ctx);
+		resolveRefresh?.({
+			primary: { usedPercent: 10, resetAt: 1 },
+			secondary: { usedPercent: 20, resetAt: 2 },
+			fetchedAt: 0,
+		});
+		await refreshPromise;
+
+		expect(setStatus).toHaveBeenLastCalledWith("multicodex-usage", undefined);
+	});
+
 	it("clears the footer immediately on model-select when the selected model is not codex", () => {
 		vi.useFakeTimers();
 		const setStatus = vi.fn();

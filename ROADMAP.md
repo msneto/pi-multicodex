@@ -290,12 +290,12 @@ Goal: confirm runtime behavior stays correct as the command model and controller
 
 ### Work items
 
-- [ ] Harden session lifecycle handling across `session_start`, `session_tree`, `turn_end`, `model_select`, and `session_shutdown` so manual override, footer state, and refresh timing stay aligned
+- [x] Harden session lifecycle handling across supported hooks (`session_start`, `session_tree`, `turn_end`, `model_select`, and `session_shutdown`) so manual override, footer state, and refresh timing stay aligned
 
 - [x] Review whether session restoration should also handle `session_tree`; fork flows already re-enter through `session_start`
-- [ ] Confirm manual override semantics remain correct across reloads and new sessions
-- [ ] Confirm status refresh paths do not leave stale footer state behind after model changes or shutdown
-- [ ] Re-check hook responsibilities after controller extraction so startup, switch, and refresh logic stay narrow
+- [x] Confirm manual override semantics remain correct across reloads and new sessions
+- [x] Confirm status refresh paths do not leave stale footer state behind after model changes or shutdown
+- [x] Re-check hook responsibilities after controller extraction so startup and refresh logic stay narrow
 
 ### Acceptance criteria
 

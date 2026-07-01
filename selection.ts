@@ -164,6 +164,17 @@ export function pickBestAccount(
 			bestLowestWithUsage = lowestCandidate;
 		}
 
+		let stableCandidate: StableWeeklyCandidate | undefined;
+		if (
+			rotation.selectionStrategy === "stable-weekly" &&
+			hasWeeklyQuota(usage)
+		) {
+			stableCandidate = createStableWeeklyCandidate(account, usage, index, now);
+			if (isBetterStableWeekly(stableCandidate, bestStableWithUsage)) {
+				bestStableWithUsage = stableCandidate;
+			}
+		}
+
 		const untouched = isUsageUntouched(usage);
 		if (!untouched) continue;
 
@@ -173,21 +184,11 @@ export function pickBestAccount(
 			bestLowestUntouched = lowestCandidate;
 		}
 
-		if (rotation.selectionStrategy === "stable-weekly") {
-			const stableCandidate = createStableWeeklyCandidate(
-				account,
-				usage,
-				index,
-				now,
-			);
-			if (hasWeeklyQuota(usage)) {
-				if (isBetterStableWeekly(stableCandidate, bestStableWithUsage)) {
-					bestStableWithUsage = stableCandidate;
-				}
-				if (isBetterStableWeekly(stableCandidate, bestStableUntouched)) {
-					bestStableUntouched = stableCandidate;
-				}
-			}
+		if (
+			stableCandidate &&
+			isBetterStableWeekly(stableCandidate, bestStableUntouched)
+		) {
+			bestStableUntouched = stableCandidate;
 		}
 	}
 

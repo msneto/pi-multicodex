@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AccountManager } from "./account-manager";
 import { createMultiCodexController } from "./multicodex-controller";
 
@@ -65,6 +65,10 @@ function createAccountManagerMock(accountCount = 1) {
 }
 
 describe("createMultiCodexController", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+	});
+
 	it("delegates footer preference writes to status controller", async () => {
 		const accountManager = createAccountManagerMock();
 		const controller = createMultiCodexController(accountManager);
@@ -112,6 +116,40 @@ describe("createMultiCodexController", () => {
 			mocked: true,
 		});
 		expect(accountManager.refreshUsageForAllAccounts).not.toHaveBeenCalled();
+		expect(mocks.statusController.refreshFor).toHaveBeenCalledWith(ctx);
+	});
+
+	it("waits for manual-state restoration before refreshing", async () => {
+		let resolveActivate: (() => void) | undefined;
+		const accountManager = createAccountManagerMock();
+		accountManager.getAvailableManualAccount = vi.fn(() => undefined);
+		accountManager.hasManualAccount = vi.fn(() => true);
+		accountManager.clearManualAccount = vi.fn();
+		accountManager.activateBestAccount = vi.fn(
+			() =>
+				new Promise<undefined>((resolve) => {
+					resolveActivate = () => resolve(undefined);
+				}),
+		);
+		const controller = createMultiCodexController(accountManager);
+		const ctx = { ui: { notify: vi.fn(), setStatus: vi.fn() } } as never;
+
+		const startSessionPromise = controller.startSession(ctx);
+
+		expect(accountManager.beginInitialization).toHaveBeenCalledOnce();
+		expect(accountManager.loadPiAuth).toHaveBeenCalledOnce();
+		await Promise.resolve();
+		await Promise.resolve();
+		expect(accountManager.clearManualAccount).toHaveBeenCalledOnce();
+		expect(mocks.statusController.startAutoRefresh).not.toHaveBeenCalled();
+		expect(mocks.statusController.loadPreferences).not.toHaveBeenCalled();
+		expect(mocks.statusController.refreshFor).not.toHaveBeenCalled();
+
+		resolveActivate?.();
+		await startSessionPromise;
+
+		expect(mocks.statusController.startAutoRefresh).toHaveBeenCalledOnce();
+		expect(mocks.statusController.loadPreferences).toHaveBeenCalledWith(ctx);
 		expect(mocks.statusController.refreshFor).toHaveBeenCalledWith(ctx);
 	});
 });

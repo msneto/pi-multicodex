@@ -304,8 +304,8 @@ export function createMultiCodexController(
 		warningHandler?: WarningHandler,
 	): Promise<void> {
 		if (accountManager.getAccounts().length === 0) return;
+		await restoreSessionState(warningHandler).catch(() => {});
 		statusController.startAutoRefresh();
-		void restoreSessionState(warningHandler).catch(() => {});
 		await controller.loadPreferences(ctx);
 		await controller.loadRotationPreferences();
 		await statusController.refreshFor(ctx);

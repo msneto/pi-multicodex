@@ -86,6 +86,7 @@ You can customize the separator, account-label width, which fields appear, and t
 - **Provider override.** MultiCodex registers itself as the `openai-codex` provider. You do not need to select a different provider or change your model — it works with whatever Codex model you already use.
 - **Auth import.** When pi has stored Codex OAuth credentials, MultiCodex imports them automatically and merges duplicate credentials into existing managed accounts when possible.
 - **Token refresh.** OAuth tokens are refreshed before expiry so requests do not fail due to stale credentials. You can also force a health refresh with `/multicodex refresh` or re-authenticate explicitly with `/multicodex reauth`.
+- **Session restoration.** On session start, MultiCodex waits for account restoration before refreshing the footer, so stale manual pins are revalidated before the new session renders.
 - **Usage tracking.** Usage data is fetched from the Codex API and cached for 5 minutes per account. The footer renders cached data immediately and refreshes in the background.
 - **Rotation settings.** The rotation panel persists selection strategy, untouched-account preference, unknown-reset fallback cooldown, and pre-stream retry count in `settings.json`.
 - **Quota cooldown.** When an account is exhausted, it stays on cooldown until its next known reset time (or 1 hour if the reset time is unknown).

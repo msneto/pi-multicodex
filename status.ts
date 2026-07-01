@@ -436,6 +436,7 @@ export function createUsageStatusController(accountManager: AccountManager) {
 	let activeContext: ExtensionContext | undefined;
 	let refreshInFlight = false;
 	let queuedRefresh = false;
+	let lifecycleGeneration = 0;
 	let preferences: FooterPreferences = DEFAULT_PREFERENCES;
 	let livePreviewPreferences: FooterPreferences | undefined;
 
@@ -446,6 +447,15 @@ export function createUsageStatusController(accountManager: AccountManager) {
 
 	function clearStatus(ctx?: ExtensionContext): void {
 		ctx?.ui.setStatus(STATUS_KEY, undefined);
+	}
+
+	function beginLifecycle(): number {
+		lifecycleGeneration += 1;
+		return lifecycleGeneration;
+	}
+
+	function isCurrentLifecycle(generation: number): boolean {
+		return generation === lifecycleGeneration;
 	}
 
 	async function ensurePreferencesLoaded(): Promise<void> {
@@ -488,7 +498,11 @@ export function createUsageStatusController(accountManager: AccountManager) {
 		}
 	}
 
-	async function updateStatus(ctx: ExtensionContext): Promise<void> {
+	async function updateStatus(
+		ctx: ExtensionContext,
+		generation: number,
+	): Promise<void> {
+		if (!isCurrentLifecycle(generation)) return;
 		if (!ctx.hasUI) return;
 		if (!isManagedModel(ctx.model)) {
 			clearStatus(ctx);
@@ -496,9 +510,11 @@ export function createUsageStatusController(accountManager: AccountManager) {
 		}
 
 		renderCachedStatus(ctx, livePreviewPreferences ?? preferences);
+		if (!isCurrentLifecycle(generation)) return;
 
 		const activeAccount = accountManager.getActiveAccount();
 		if (!activeAccount) {
+			if (!isCurrentLifecycle(generation)) return;
 			ctx.ui.setStatus(
 				STATUS_KEY,
 				ctx.ui.theme.fg("warning", "Multicodex no active account"),
@@ -510,6 +526,7 @@ export function createUsageStatusController(accountManager: AccountManager) {
 		const usage =
 			(await accountManager.refreshUsageForAccount(activeAccount)) ??
 			cachedUsage;
+		if (!isCurrentLifecycle(generation)) return;
 		ctx.ui.setStatus(
 			STATUS_KEY,
 			formatActiveAccountStatus(
@@ -521,7 +538,10 @@ export function createUsageStatusController(accountManager: AccountManager) {
 		);
 	}
 
-	async function refreshFor(ctx: ExtensionContext): Promise<void> {
+	async function refreshFor(
+		ctx: ExtensionContext,
+		generation = lifecycleGeneration,
+	): Promise<void> {
 		activeContext = ctx;
 		if (refreshInFlight) {
 			queuedRefresh = true;
@@ -530,12 +550,12 @@ export function createUsageStatusController(accountManager: AccountManager) {
 
 		refreshInFlight = true;
 		try {
-			await updateStatus(ctx);
+			await updateStatus(ctx, generation);
 		} finally {
 			refreshInFlight = false;
 			if (queuedRefresh && activeContext) {
 				queuedRefresh = false;
-				await refreshFor(activeContext);
+				await refreshFor(activeContext, lifecycleGeneration);
 			}
 		}
 	}
@@ -546,14 +566,22 @@ export function createUsageStatusController(accountManager: AccountManager) {
 		if (modelSelectTimer) {
 			clearTimeout(modelSelectTimer);
 		}
+		const generation = lifecycleGeneration;
 		modelSelectTimer = setTimeout(() => {
 			modelSelectTimer = undefined;
-			void refreshFor(ctx);
+			if (!isCurrentLifecycle(generation)) return;
+			void refreshFor(ctx, generation);
 		}, MODEL_SELECT_REFRESH_DEBOUNCE_MS);
 		modelSelectTimer.unref?.();
 	}
 
 	function startAutoRefresh(): void {
+		beginLifecycle();
+		if (modelSelectTimer) {
+			clearTimeout(modelSelectTimer);
+			modelSelectTimer = undefined;
+		}
+		queuedRefresh = false;
 		if (refreshTimer) clearInterval(refreshTimer);
 		refreshTimer = setInterval(() => {
 			if (!activeContext) return;
@@ -563,6 +591,7 @@ export function createUsageStatusController(accountManager: AccountManager) {
 	}
 
 	function stopAutoRefresh(ctx?: ExtensionContext): void {
+		beginLifecycle();
 		if (refreshTimer) {
 			clearInterval(refreshTimer);
 			refreshTimer = undefined;
