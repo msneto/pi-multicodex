@@ -386,7 +386,8 @@ function formatRankingDecisionSection(
 		stableRankable.map((account) => account.email),
 	);
 	const stableWeeklyRandomFallback =
-		rotation.selectionStrategy === "stable-weekly" && stableRankable.length === 0;
+		rotation.selectionStrategy === "stable-weekly" &&
+		stableRankable.length === 0;
 	const randomFallbackBecauseNoUsage = availableWithUsage.length === 0;
 	const mode = !activeAccount
 		? "none"

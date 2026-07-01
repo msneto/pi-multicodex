@@ -92,7 +92,10 @@ describe("formatAccountReportLines", () => {
 		vi.spyOn(Date, "now").mockReturnValue(NOW);
 		const accountManager = createAccountManagerMock({
 			activeEmail: "a@example.com",
-			rotation: { ...DEFAULT_ROTATION_SETTINGS, selectionStrategy: "stable-weekly" },
+			rotation: {
+				...DEFAULT_ROTATION_SETTINGS,
+				selectionStrategy: "stable-weekly",
+			},
 			usage: {
 				"a@example.com": {
 					primary: { usedPercent: 10, resetAt: NOW + 60_000 },
@@ -112,7 +115,9 @@ describe("formatAccountReportLines", () => {
 			"reason: stable-weekly had no weekly-quota candidates, so rotation fell back to random",
 		);
 		expect(lines).toContain("  - a@example.com [active]");
-		expect(lines).toContain("why: random fallback picked this eligible account");
+		expect(lines).toContain(
+			"why: random fallback picked this eligible account",
+		);
 	});
 
 	it("explains every account when lowest-usage picks active", () => {
