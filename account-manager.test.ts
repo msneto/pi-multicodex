@@ -1,34 +1,57 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { refreshOpenAICodexToken } from "@earendil-works/pi-ai/oauth";
 
-const mocks = vi.hoisted(() => ({
-	storageData: {
-		accounts: [] as Array<Record<string, unknown>>,
-		activeEmail: undefined as string | undefined,
-	},
-	loadImportedOpenAICodexAuth: vi.fn(),
-	saveStorage: vi.fn(),
-	appendUsageHistorySample: vi.fn(),
-}));
-vi.mock("./storage", () => ({
-	loadStorage: () =>
-		JSON.parse(JSON.stringify(mocks.storageData)) as {
-			accounts: Array<Record<string, unknown>>;
-			activeEmail?: string;
-		},
-	saveStorage: mocks.saveStorage,
-}));
+function getMocks() {
+	const globalMocks = globalThis as typeof globalThis & {
+		__piMulticodexMocks?: {
+			storageData: {
+				accounts: Array<Record<string, unknown>>;
+				activeEmail?: string;
+			};
+			loadImportedOpenAICodexAuth: ReturnType<typeof vi.fn>;
+			saveStorage: ReturnType<typeof vi.fn>;
+			appendUsageHistorySample: ReturnType<typeof vi.fn>;
+		};
+	};
+
+	return (
+		globalMocks.__piMulticodexMocks ??= {
+			storageData: {
+				accounts: [] as Array<Record<string, unknown>>,
+				activeEmail: undefined as string | undefined,
+			},
+			loadImportedOpenAICodexAuth: vi.fn(),
+			saveStorage: vi.fn(),
+			appendUsageHistorySample: vi.fn(),
+		}
+	);
+}
+
+vi.mock("./storage", () => {
+	const mocks = getMocks();
+	return {
+		loadStorage: () =>
+			JSON.parse(JSON.stringify(mocks.storageData)) as {
+				accounts: Array<Record<string, unknown>>;
+				activeEmail?: string;
+			},
+		saveStorage: mocks.saveStorage,
+	};
+});
 
 vi.mock("./usage-history", () => ({
-	appendUsageHistorySample: mocks.appendUsageHistorySample,
+	appendUsageHistorySample: getMocks().appendUsageHistorySample,
 }));
 
 vi.mock("./auth", () => ({
-	loadImportedOpenAICodexAuth: mocks.loadImportedOpenAICodexAuth,
+	loadImportedOpenAICodexAuth: getMocks().loadImportedOpenAICodexAuth,
 }));
 
 vi.mock("@earendil-works/pi-ai/oauth", () => ({
 	refreshOpenAICodexToken: vi.fn(),
 }));
+
+const mocks = getMocks();
 
 import { AccountManager } from "./account-manager";
 
@@ -232,6 +255,40 @@ describe("AccountManager account deduplication", () => {
 		expect(account.refreshToken).toBe("new-refresh");
 	});
 });
+
+describe("AccountManager token refresh errors", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		mocks.storageData.accounts = [];
+		mocks.storageData.activeEmail = undefined;
+		mocks.loadImportedOpenAICodexAuth.mockResolvedValue(undefined);
+	});
+
+	it("wraps token refresh failures with multicodex context", async () => {
+		(refreshOpenAICodexToken as unknown as { mockRejectedValueOnce: (value: unknown) => void }).mockRejectedValueOnce(
+			new TypeError("fetch failed"),
+		);
+
+		mocks.storageData.accounts = [
+			{
+				email: "token@example.com",
+				accessToken: "stale-access",
+				refreshToken: "refresh",
+				expiresAt: 0,
+			},
+		];
+
+		const manager = new AccountManager();
+		const account = manager.getAccount("token@example.com");
+		expect(account).toBeDefined();
+		if (!account) return;
+
+		await expect(manager.ensureValidToken(account)).rejects.toThrow(
+			"[pi-multicodex] token refresh token@example.com: fetch failed",
+		);
+	});
+});
+
 
 describe("AccountManager usage history", () => {
 	beforeEach(() => {

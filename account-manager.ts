@@ -382,6 +382,7 @@ export class AccountManager {
 		try {
 			const token = await this.ensureValidToken(account);
 			const usage = await fetchCodexUsage(token, account.accountId, {
+				scope: `usage fetch ${account.email}`,
 				signal: options?.signal,
 				timeoutMs: USAGE_REQUEST_TIMEOUT_MS,
 			});
@@ -531,7 +532,12 @@ export class AccountManager {
 				return account.accessToken;
 			} catch (error) {
 				this.markNeedsReauth(account);
-				throw error;
+				throw new Error(
+					formatMulticodexMessage(
+						`token refresh ${account.email}`,
+						normalizeUnknownError(error),
+					),
+				);
 			} finally {
 				this.refreshPromises.delete(account.email);
 			}

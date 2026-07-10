@@ -1,4 +1,6 @@
 import { createTimeoutController } from "./abort-utils";
+import { formatMulticodexMessage } from "./error-format";
+import { normalizeUnknownError } from "./streams";
 import { type CodexUsageSnapshot, parseCodexUsageResponse } from "./usage";
 
 interface WhamUsageResponse {
@@ -17,7 +19,7 @@ interface WhamUsageResponse {
 export async function fetchCodexUsage(
 	accessToken: string,
 	accountId: string | undefined,
-	options?: { signal?: AbortSignal; timeoutMs?: number },
+	options?: { signal?: AbortSignal; timeoutMs?: number; scope?: string },
 ): Promise<CodexUsageSnapshot> {
 	const { controller, clear } = createTimeoutController(
 		options?.signal,
@@ -44,6 +46,13 @@ export async function fetchCodexUsage(
 
 		const data = (await response.json()) as WhamUsageResponse;
 		return { ...parseCodexUsageResponse(data), fetchedAt: Date.now() };
+	} catch (error) {
+		throw new Error(
+			formatMulticodexMessage(
+				options?.scope ?? "usage fetch",
+				normalizeUnknownError(error),
+			),
+		);
 	} finally {
 		clear();
 	}
