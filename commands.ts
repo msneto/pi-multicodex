@@ -233,7 +233,7 @@ async function loginAndActivateAccount(
 			onAuth: ({ url }) => {
 				void openLoginInBrowser(pi, ctx, url);
 				ctx.ui.notify(`Please open this URL to login: ${url}`, "info");
-				console.log(`[multicodex] Login URL: ${url}`);
+				console.log(`[pi-multicodex] Login URL: ${url}`);
 			},
 			onPrompt: async ({ message }) => (await ctx.ui.input(message)) || "",
 		});
