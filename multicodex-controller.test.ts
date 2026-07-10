@@ -1,9 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AccountManager } from "./account-manager";
-import { createMultiCodexController } from "./multicodex-controller";
+import * as rotationModule from "./rotation-settings";
+import * as statusModule from "./status";
 
-const mocks = vi.hoisted(() => ({
-	statusController: {
+function createStatusControllerMock() {
+	return {
 		loadPreferences: vi.fn().mockResolvedValue(undefined),
 		setPreferences: vi.fn().mockResolvedValue(undefined),
 		openPreferencesPanel: vi.fn().mockResolvedValue(undefined),
@@ -20,18 +21,8 @@ const mocks = vi.hoisted(() => ({
 			separator: "/",
 			accountLabelMaxChars: 14,
 		})),
-	},
-	rotationSettings: { mocked: true },
-	loadRotationSettings: vi.fn(() => ({ mocked: true })),
-}));
-
-vi.mock("./status", () => ({
-	createUsageStatusController: () => mocks.statusController,
-}));
-
-vi.mock("./rotation-settings", () => ({
-	loadRotationSettings: mocks.loadRotationSettings,
-}));
+	};
+}
 
 function createAccountManagerMock(accountCount = 1) {
 	return {
@@ -66,10 +57,23 @@ function createAccountManagerMock(accountCount = 1) {
 
 describe("createMultiCodexController", () => {
 	beforeEach(() => {
-		vi.clearAllMocks();
+		vi.restoreAllMocks();
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
 	});
 
 	it("delegates footer preference writes to status controller", async () => {
+		const statusController = createStatusControllerMock();
+		vi.spyOn(statusModule, "createUsageStatusController").mockReturnValue(
+			statusController as never,
+		);
+		vi.spyOn(rotationModule, "loadRotationSettings").mockReturnValue({
+			mocked: true,
+		} as never);
+
+		const { createMultiCodexController } = await import("./multicodex-controller");
 		const accountManager = createAccountManagerMock();
 		const controller = createMultiCodexController(accountManager);
 
@@ -83,7 +87,7 @@ describe("createMultiCodexController", () => {
 			accountLabelMaxChars: 16,
 		});
 
-		expect(mocks.statusController.setPreferences).toHaveBeenCalledWith({
+		expect(statusController.setPreferences).toHaveBeenCalledWith({
 			usageMode: "used",
 			resetWindow: "5h",
 			showAccount: false,
@@ -104,23 +108,40 @@ describe("createMultiCodexController", () => {
 	});
 
 	it("loads shared config before session refresh", async () => {
+		const statusController = createStatusControllerMock();
+		vi.spyOn(statusModule, "createUsageStatusController").mockReturnValue(
+			statusController as never,
+		);
+		const loadRotationSettingsSpy = vi
+			.spyOn(rotationModule, "loadRotationSettings")
+			.mockReturnValue({ mocked: true } as never);
+
+		const { createMultiCodexController } = await import("./multicodex-controller");
 		const accountManager = createAccountManagerMock();
 		const controller = createMultiCodexController(accountManager);
 		const ctx = { ui: { notify: vi.fn(), setStatus: vi.fn() } } as never;
 
 		await controller.startSession(ctx);
 
-		expect(mocks.statusController.loadPreferences).toHaveBeenCalledWith(ctx);
-		expect(mocks.loadRotationSettings).toHaveBeenCalledOnce();
+		expect(loadRotationSettingsSpy).toHaveBeenCalledOnce();
 		expect(accountManager.loadRotationPreferences).toHaveBeenCalledWith({
 			mocked: true,
 		});
 		expect(accountManager.refreshUsageForAllAccounts).not.toHaveBeenCalled();
-		expect(mocks.statusController.refreshFor).toHaveBeenCalledWith(ctx);
+		expect(statusController.loadPreferences).toHaveBeenCalledWith(ctx);
+		expect(statusController.refreshFor).toHaveBeenCalledWith(ctx);
 	});
 
 	it("waits for manual-state restoration before refreshing", async () => {
 		let resolveActivate: (() => void) | undefined;
+		const statusController = createStatusControllerMock();
+		vi.spyOn(statusModule, "createUsageStatusController").mockReturnValue(
+			statusController as never,
+		);
+		vi.spyOn(rotationModule, "loadRotationSettings").mockReturnValue({
+			mocked: true,
+		} as never);
+
 		const accountManager = createAccountManagerMock();
 		accountManager.getAvailableManualAccount = vi.fn(() => undefined);
 		accountManager.hasManualAccount = vi.fn(() => true);
@@ -131,6 +152,8 @@ describe("createMultiCodexController", () => {
 					resolveActivate = () => resolve(undefined);
 				}),
 		);
+
+		const { createMultiCodexController } = await import("./multicodex-controller");
 		const controller = createMultiCodexController(accountManager);
 		const ctx = { ui: { notify: vi.fn(), setStatus: vi.fn() } } as never;
 
@@ -141,15 +164,15 @@ describe("createMultiCodexController", () => {
 		await Promise.resolve();
 		await Promise.resolve();
 		expect(accountManager.clearManualAccount).toHaveBeenCalledOnce();
-		expect(mocks.statusController.startAutoRefresh).not.toHaveBeenCalled();
-		expect(mocks.statusController.loadPreferences).not.toHaveBeenCalled();
-		expect(mocks.statusController.refreshFor).not.toHaveBeenCalled();
+		expect(statusController.startAutoRefresh).not.toHaveBeenCalled();
+		expect(statusController.loadPreferences).not.toHaveBeenCalled();
+		expect(statusController.refreshFor).not.toHaveBeenCalled();
 
 		resolveActivate?.();
 		await startSessionPromise;
 
-		expect(mocks.statusController.startAutoRefresh).toHaveBeenCalledOnce();
-		expect(mocks.statusController.loadPreferences).toHaveBeenCalledWith(ctx);
-		expect(mocks.statusController.refreshFor).toHaveBeenCalledWith(ctx);
+		expect(statusController.startAutoRefresh).toHaveBeenCalledOnce();
+		expect(statusController.loadPreferences).toHaveBeenCalledWith(ctx);
+		expect(statusController.refreshFor).toHaveBeenCalledWith(ctx);
 	});
 });

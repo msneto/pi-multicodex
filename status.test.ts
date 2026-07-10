@@ -316,7 +316,9 @@ describe("createUsageStatusController", () => {
 		);
 		expect(refreshUsageForAccount).not.toHaveBeenCalled();
 
-		await vi.advanceTimersByTimeAsync(250);
+		vi.advanceTimersByTime(250);
+		await Promise.resolve();
+		await Promise.resolve();
 
 		expect(refreshUsageForAccount).toHaveBeenCalledTimes(1);
 	});
@@ -344,7 +346,9 @@ describe("createUsageStatusController", () => {
 		controller.scheduleModelSelectRefresh(ctx);
 		controller.startAutoRefresh();
 
-		await vi.advanceTimersByTimeAsync(250);
+		vi.advanceTimersByTime(250);
+		await Promise.resolve();
+		await Promise.resolve();
 
 		expect(refreshUsageForAccount).not.toHaveBeenCalled();
 	});
