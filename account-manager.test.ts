@@ -91,14 +91,13 @@ describe("AccountManager ephemeral pi auth", () => {
 		expect(mocks.saveStorage).not.toHaveBeenCalled();
 	});
 
-	it("creates ephemeral even if refresh token matches a managed account with different email", async () => {
+	it("creates ephemeral even if refresh token matches a managed account with different email when accountId is missing", async () => {
 		mocks.storageData.accounts = [
 			{
 				email: "managed@example.com",
 				accessToken: "managed-access",
 				refreshToken: "shared-refresh",
 				expiresAt: Date.now() + 3600_000,
-				accountId: "acc-1",
 			},
 		];
 		mocks.loadImportedOpenAICodexAuth.mockResolvedValue({
@@ -108,14 +107,13 @@ describe("AccountManager ephemeral pi auth", () => {
 				access: "pi-access",
 				refresh: "shared-refresh",
 				expires: Date.now() + 3600_000,
-				accountId: "acc-1",
 			},
 		});
 
 		const manager = new AccountManager();
 		await manager.loadPiAuth();
 
-		// Different emails = different accounts, even if same refresh token
+		// Different emails = different accounts when no stable accountId is available
 		expect(manager.getAccounts()).toHaveLength(2);
 		expect(manager.getAccount("managed@example.com")).toBeDefined();
 		expect(manager.getAccount("pi@example.com")).toBeDefined();
@@ -146,6 +144,35 @@ describe("AccountManager ephemeral pi auth", () => {
 		expect(manager.getAccounts()).toHaveLength(1);
 		const first = manager.getAccounts()[0];
 		expect(first ? manager.isPiAuthAccount(first) : true).toBe(false);
+	});
+
+	it("skips ephemeral when managed account matches accountId", async () => {
+		mocks.storageData.accounts = [
+			{
+				email: "managed@example.com",
+				accessToken: "managed-access",
+				refreshToken: "managed-refresh",
+				expiresAt: Date.now() + 3600_000,
+				accountId: "acc-1",
+			},
+		];
+		mocks.loadImportedOpenAICodexAuth.mockResolvedValue({
+			identifier: "pi@example.com",
+			fingerprint: "fp",
+			credentials: {
+				access: "pi-access",
+				refresh: "shared-refresh",
+				expires: Date.now() + 3600_000,
+				accountId: "acc-1",
+			},
+		});
+
+		const manager = new AccountManager();
+		await manager.loadPiAuth();
+
+		expect(manager.getAccounts()).toHaveLength(1);
+		expect(manager.getAccount("managed@example.com")).toBeDefined();
+		expect(manager.getAccount("pi@example.com")).toBeUndefined();
 	});
 
 	it("does not persist ephemeral account when saving", async () => {
@@ -207,7 +234,33 @@ describe("AccountManager account deduplication", () => {
 		mocks.loadImportedOpenAICodexAuth.mockResolvedValue(undefined);
 	});
 
-	it("creates separate accounts for different emails even with same refresh token", () => {
+	it("creates separate accounts for different emails when accountId is missing", () => {
+		mocks.storageData.accounts = [
+			{
+				email: "old@example.com",
+				accessToken: "old-access",
+				refreshToken: "shared-refresh",
+				expiresAt: 100,
+			},
+		];
+
+		const manager = new AccountManager();
+		const account = manager.addOrUpdateAccount("new@example.com", {
+			access: "new-access",
+			refresh: "shared-refresh",
+			expires: 300,
+		});
+
+		expect(account.email).toBe("new@example.com");
+		expect(manager.getAccounts()).toHaveLength(2);
+		expect(manager.getAccount("old@example.com")).toBeDefined();
+		expect(manager.getAccount("new@example.com")).toMatchObject({
+			accessToken: "new-access",
+			expiresAt: 300,
+		});
+	});
+
+	it("reuses an existing account when accountId matches", () => {
 		mocks.storageData.accounts = [
 			{
 				email: "old@example.com",
@@ -226,13 +279,14 @@ describe("AccountManager account deduplication", () => {
 			accountId: "acc-123",
 		});
 
-		expect(account.email).toBe("new@example.com");
-		expect(manager.getAccounts()).toHaveLength(2);
-		expect(manager.getAccount("old@example.com")).toBeDefined();
-		expect(manager.getAccount("new@example.com")).toMatchObject({
+		expect(account.email).toBe("old@example.com");
+		expect(manager.getAccounts()).toHaveLength(1);
+		expect(manager.getAccount("old@example.com")).toMatchObject({
 			accessToken: "new-access",
 			expiresAt: 300,
+			accountId: "acc-123",
 		});
+		expect(manager.getAccount("new@example.com")).toBeUndefined();
 	});
 
 	it("updates existing account when same email is added again", () => {

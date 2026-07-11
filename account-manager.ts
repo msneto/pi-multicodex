@@ -144,6 +144,19 @@ export class AccountManager {
 		return true;
 	}
 
+	private findManagedAccountByIdentity(
+		email: string,
+		accountId?: string,
+	): Account | undefined {
+		if (accountId) {
+			const byAccountId = this.data.accounts.find(
+				(account) => account.accountId === accountId,
+			);
+			if (byAccountId) return byAccountId;
+		}
+		return this.data.accounts.find((account) => account.email === email);
+	}
+
 	private applyCredentials(account: Account, creds: OAuthCredentials): boolean {
 		const accountId =
 			typeof creds.accountId === "string" ? creds.accountId : undefined;
@@ -173,7 +186,10 @@ export class AccountManager {
 	}
 
 	addOrUpdateAccount(email: string, creds: OAuthCredentials): Account {
-		const existing = this.data.accounts.find((a) => a.email === email);
+		const existing = this.findManagedAccountByIdentity(
+			email,
+			typeof creds.accountId === "string" ? creds.accountId : undefined,
+		);
 		if (existing) {
 			const changed = this.applyCredentials(existing, creds);
 			if (changed) {
@@ -260,7 +276,7 @@ export class AccountManager {
 	/**
 	 * Read pi's openai-codex auth from auth.json and expose it as a
 	 * memory-only ephemeral account. Never persists to codex-accounts.json.
-	 * If the identity already exists as a managed account, skip it.
+	 * If the stable identity already exists as a managed account, skip it.
 	 */
 	async loadPiAuth(): Promise<void> {
 		const imported = await loadImportedOpenAICodexAuth();
@@ -270,8 +286,11 @@ export class AccountManager {
 			return;
 		}
 
-		const alreadyManaged = this.data.accounts.find(
-			(a) => a.email === imported.identifier,
+		const alreadyManaged = this.findManagedAccountByIdentity(
+			imported.identifier,
+			typeof imported.credentials.accountId === "string"
+				? imported.credentials.accountId
+				: undefined,
 		);
 
 		if (alreadyManaged) {
