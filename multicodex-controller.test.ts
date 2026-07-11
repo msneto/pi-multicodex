@@ -1,4 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const fsMocks = vi.hoisted(() => ({
+	existsSync: vi.fn(),
+	mkdirSync: vi.fn(),
+	readFileSync: vi.fn(),
+	writeFileSync: vi.fn(),
+	promises: {
+		mkdir: vi.fn(),
+		access: vi.fn(),
+	},
+	constants: {
+		R_OK: 4,
+		W_OK: 2,
+	},
+}));
+
+vi.mock("node:fs", () => fsMocks);
 import type { AccountManager } from "./account-manager";
 import * as rotationModule from "./rotation-settings";
 import * as statusModule from "./status";
@@ -57,6 +74,7 @@ function createAccountManagerMock(accountCount = 1) {
 
 describe("createMultiCodexController", () => {
 	beforeEach(() => {
+		vi.clearAllMocks();
 		vi.restoreAllMocks();
 	});
 
@@ -180,5 +198,54 @@ describe("createMultiCodexController", () => {
 		expect(statusController.startAutoRefresh).toHaveBeenCalledOnce();
 		expect(statusController.loadPreferences).toHaveBeenCalledWith(ctx);
 		expect(statusController.refreshFor).toHaveBeenCalledWith(ctx);
+	});
+
+	it("reports rotation writability in verify output", async () => {
+		const statusController = createStatusControllerMock();
+		vi.spyOn(statusModule, "createUsageStatusController").mockReturnValue(
+			statusController as never,
+		);
+		vi.spyOn(rotationModule, "loadRotationSettings").mockReturnValue({
+			mocked: true,
+		} as never);
+		fsMocks.promises.mkdir.mockResolvedValue(undefined);
+		fsMocks.promises.access.mockImplementation(async (target) => {
+			const targetPath = String(target);
+			if (targetPath.endsWith("multicodex/rotation.json")) {
+				const error = new Error("permission denied") as NodeJS.ErrnoException;
+				error.code = "EACCES";
+				throw error;
+			}
+			if (
+				targetPath.endsWith("multicodex/accounts.json") ||
+				targetPath.endsWith("settings.json") ||
+				targetPath.endsWith("usage-history.json")
+			) {
+				const error = new Error("not found") as NodeJS.ErrnoException;
+				error.code = "ENOENT";
+				throw error;
+			}
+			return undefined;
+		});
+
+		const { createMultiCodexController } = await import(
+			"./multicodex-controller"
+		);
+		const accountManager = createAccountManagerMock();
+		const controller = createMultiCodexController(accountManager);
+		const notify = vi.fn();
+		const ctx = { hasUI: false, ui: { notify, setStatus: vi.fn() } } as never;
+
+		await controller.runVerifyCommand(ctx);
+
+		expect(fsMocks.promises.mkdir).toHaveBeenCalled();
+		expect(notify).toHaveBeenCalledWith(
+			expect.stringContaining("rotation=fail"),
+			"warning",
+		);
+		expect(notify).toHaveBeenCalledWith(
+			expect.stringContaining("rotationSummary="),
+			"warning",
+		);
 	});
 });

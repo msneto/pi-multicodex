@@ -31,6 +31,7 @@ export interface VerifySummary {
 	storageWritable: boolean;
 	settingsWritable: boolean;
 	historyWritable: boolean;
+	rotationWritable: boolean;
 	accounts: number;
 	activeAccount: string;
 	hasPiAuth: boolean;
@@ -105,12 +106,20 @@ export interface MultiCodexController {
 
 const SETTINGS_FILE = getAgentSettingsPath();
 
-async function isWritableDirectoryFor(filePath: string): Promise<boolean> {
+async function isWritableTargetFor(filePath: string): Promise<boolean> {
 	try {
 		const directory = path.dirname(filePath);
 		await fs.mkdir(directory, { recursive: true });
-		await fs.access(directory, fsConstants.R_OK | fsConstants.W_OK);
-		return true;
+		try {
+			await fs.access(filePath, fsConstants.W_OK);
+			return true;
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+				return false;
+			}
+			await fs.access(directory, fsConstants.R_OK | fsConstants.W_OK);
+			return true;
+		}
 	} catch {
 		return false;
 	}
@@ -216,11 +225,12 @@ export function createMultiCodexController(
 	}
 
 	async function getVerifySummary(): Promise<VerifySummary> {
-		const storageWritable = await isWritableDirectoryFor(STORAGE_FILE);
-		const settingsWritable = await isWritableDirectoryFor(SETTINGS_FILE);
-		const historyWritable = await isWritableDirectoryFor(
+		const storageWritable = await isWritableTargetFor(STORAGE_FILE);
+		const settingsWritable = await isWritableTargetFor(SETTINGS_FILE);
+		const historyWritable = await isWritableTargetFor(
 			MULTICODEX_USAGE_HISTORY_FILE,
 		);
+		const rotationWritable = await isWritableTargetFor(MULTICODEX_ROTATION_FILE);
 		const hasPiAuth = accountManager
 			.getAccounts()
 			.some((account) => accountManager.isPiAuthAccount(account));
@@ -230,15 +240,17 @@ export function createMultiCodexController(
 		return {
 			storageWritable,
 			settingsWritable,
+			historyWritable,
+			rotationWritable,
 			accounts,
 			activeAccount,
 			hasPiAuth,
 			needsReauth,
-			historyWritable,
 			ok:
 				storageWritable &&
 				settingsWritable &&
 				historyWritable &&
+				rotationWritable &&
 				needsReauth === 0,
 		};
 	}
@@ -429,21 +441,22 @@ export function createMultiCodexController(
 
 		if (!ctx.hasUI) {
 			ctx.ui.notify(
-				`verify: ${summary.ok ? "PASS" : "WARN"} storage=${summary.storageWritable ? "ok" : "fail"} settings=${summary.settingsWritable ? "ok" : "fail"} history=${summary.historyWritable ? "ok" : "fail"} accounts=${summary.accounts} active=${summary.activeAccount} piAuth=${summary.hasPiAuth ? "loaded" : "none"} needsReauth=${summary.needsReauth} rotation=${rotationSummary}`,
+				`verify: ${summary.ok ? "PASS" : "WARN"} storage=${summary.storageWritable ? "ok" : "fail"} settings=${summary.settingsWritable ? "ok" : "fail"} history=${summary.historyWritable ? "ok" : "fail"} rotation=${summary.rotationWritable ? "ok" : "fail"} accounts=${summary.accounts} active=${summary.activeAccount} piAuth=${summary.hasPiAuth ? "loaded" : "none"} needsReauth=${summary.needsReauth} rotationSummary=${rotationSummary}`,
 				summary.ok ? "info" : "warning",
 			);
 			return;
 		}
 
 		await ctx.ui.select(`MultiCodex Verify (${summary.ok ? "PASS" : "WARN"})`, [
-			`storage directory writable: ${summary.storageWritable ? "yes" : "no"}`,
-			`settings directory writable: ${summary.settingsWritable ? "yes" : "no"}`,
-			`history directory writable: ${summary.historyWritable ? "yes" : "no"}`,
+			`storage writable: ${summary.storageWritable ? "yes" : "no"}`,
+			`settings writable: ${summary.settingsWritable ? "yes" : "no"}`,
+			`history writable: ${summary.historyWritable ? "yes" : "no"}`,
+			`rotation writable: ${summary.rotationWritable ? "yes" : "no"}`,
 			`managed accounts: ${summary.accounts}`,
 			`active account: ${summary.activeAccount}`,
 			`pi auth (ephemeral): ${summary.hasPiAuth ? "loaded" : "none"}`,
 			`accounts needing re-authentication: ${summary.needsReauth}`,
-			`rotation: ${rotationSummary}`,
+			`rotation settings: ${rotationSummary}`,
 		]);
 	}
 

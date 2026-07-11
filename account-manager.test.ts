@@ -487,6 +487,32 @@ describe("AccountManager pi auth exhaustion handling", () => {
 	});
 });
 
+describe("AccountManager persistence errors", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		mocks.storageData.accounts = [];
+		mocks.storageData.activeEmail = undefined;
+		mocks.loadImportedOpenAICodexAuth.mockResolvedValue(undefined);
+	});
+
+	it("surfaces storage write failures when adding an account", () => {
+		mocks.saveStorage.mockImplementation(() => {
+			throw new Error("disk full");
+		});
+
+		const manager = new AccountManager();
+
+		expect(() =>
+			manager.addOrUpdateAccount("new@example.com", {
+				access: "new-access",
+				refresh: "new-refresh",
+				expires: Date.now() + 3600_000,
+			}),
+		).toThrow("disk full");
+		expect(mocks.saveStorage).toHaveBeenCalled();
+	});
+});
+
 describe("AccountManager ready-gate", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();

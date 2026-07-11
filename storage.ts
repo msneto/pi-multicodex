@@ -133,7 +133,12 @@ function readStorageFile(filePath: string): StorageData | undefined {
 			needsLegacyStrip(raw);
 		const data = migrateRawStorage(raw);
 		if (needsMigration && filePath === MULTICODEX_ACCOUNTS_FILE) {
-			saveStorage(data);
+			try {
+				saveStorage(data);
+			} catch {
+				// The migrated data is still usable in memory; persistence errors
+				// are already logged by saveStorage().
+			}
 		}
 		return data;
 	} catch (error) {
@@ -150,7 +155,12 @@ export function loadStorage(): StorageData {
 
 	const legacy = readStorageFile(LEGACY_STORAGE_FILE);
 	if (legacy) {
-		saveStorage(legacy);
+		try {
+			saveStorage(legacy);
+		} catch {
+			// The legacy payload is still usable in memory; persistence errors
+			// are already logged by saveStorage().
+		}
 		return legacy;
 	}
 
@@ -172,5 +182,6 @@ export function saveStorage(data: StorageData): void {
 		fs.writeFileSync(STORAGE_FILE, JSON.stringify(output, null, 2));
 	} catch (error) {
 		console.error(formatMulticodexError("save multicodex accounts", error));
+		throw error;
 	}
 }
