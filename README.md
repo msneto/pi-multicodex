@@ -84,8 +84,10 @@ You can customize the separator, account-label width, which fields appear, and t
 ## What it does under the hood
 
 - **Provider override.** MultiCodex registers itself as the `openai-codex` provider. You do not need to select a different provider or change your model — it works with whatever Codex model you already use.
-- **Auth import.** When pi has stored Codex OAuth credentials, MultiCodex imports them automatically and merges duplicate credentials into existing managed accounts when possible.
+- **Auth import.** When pi has stored Codex OAuth credentials, MultiCodex imports them automatically and merges duplicate credentials into existing managed accounts when possible. When a stable `accountId` is available, it uses that as the identity match so imported auth binds to the right managed account.
+- **Login flow.** When MultiCodex needs browser approval, it opens the login page and keeps the raw URL out of notifications and logs.
 - **Token refresh.** OAuth tokens are refreshed before expiry so requests do not fail due to stale credentials. You can also force a health refresh with `/multicodex refresh` or re-authenticate explicitly with `/multicodex reauth`.
+- **Command routing.** `commands.ts` stays as the dispatcher and autocomplete registry, while account-flow orchestration lives in `account-flows.ts`.
 - **Session restoration.** On session start, MultiCodex waits for account restoration before refreshing the footer, so stale manual pins are revalidated before the new session renders.
 - **Usage tracking.** Usage data is fetched from the Codex API and cached for 5 minutes per account. The footer renders cached data immediately and refreshes in the background.
 - **Rotation settings.** The rotation panel persists selection strategy, untouched-account preference, unknown-reset fallback cooldown, and pre-stream retry count in `settings.json`.
@@ -140,7 +142,7 @@ The original MultiCodex extension by [kim0](https://github.com/kim0). It introdu
 
 This fork diverged significantly:
 
-- **Modular architecture.** Split into 16 focused modules (~2,400 lines of runtime code, ~1,200 lines of tests) instead of one monolithic file.
+- **Modular architecture.** Split into 17 focused modules (~2,400 lines of runtime code, ~1,200 lines of tests) instead of one monolithic file.
 - **Command family.** One `/multicodex` command with subcommands and dynamic autocomplete, replacing three separate top-level commands.
 - **Account removal.** In-session account deletion from the picker via `Backspace` with confirmation — the original had no way to remove accounts without editing the JSON file.
 - **Non-interactive mode.** All inspection and recovery subcommands (`show`, `verify`, `path`, `reset`, `help`) work without a UI panel.

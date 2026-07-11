@@ -19,16 +19,19 @@ The current shipped behavior is:
 
 - MultiCodex overrides the normal `openai-codex` provider path directly.
 - MultiCodex auto-imports pi's stored `openai-codex` OAuth auth when it is new or changed.
+- Imported Codex auth prefers stable `accountId` identity matching when available, so the same managed account is reused even if the visible label changes.
 - MultiCodex uses one `/multicodex` command family with subcommands.
 - `/multicodex accounts` is the merged account-management surface for inspection, selection, refresh, re-authentication, add, and removal.
+- Command dispatch stays in `commands.ts` while account-flow orchestration lives in `account-flows.ts`.
 - `/multicodex use` and `/multicodex show` remain aliases into that merged account-management flow.
 - `/multicodex refresh`, `/multicodex verify`, `/multicodex path`, `/multicodex reset`, and `/multicodex help` are available without opening a panel.
 - `/multicodex footer` opens an interactive settings panel with live preview, or prints a summary in non-interactive mode.
+- Login prompts open the browser and keep the raw login URL out of notifications and logs.
 - The usage footer uses a compact, configurable layout with separator and account-label truncation controls while still applying severity-based color tiers as quota depletes.
 - Footer settings are stored in `~/.pi/agent/settings.json` under `pi-multicodex`.
 - Managed account storage is stored in `~/.pi/agent/codex-accounts.json`.
 - The behavior contract (selection priority, retry policy, manual override, error classification) is documented in README.
-- Rotation criteria are still hard-coded but fully documented.
+- Rotation criteria are persisted in settings and documented in README.
 
 ## Operating principles
 
@@ -239,6 +242,7 @@ Goal: move from scattered command logic to one shared controller that owns confi
 - [x] Move reset logic into the controller
 - [x] Provide a stable path API for config and storage reporting
 - [x] Keep hooks and command handlers thin by pushing orchestration into the controller
+- [x] Extract account-management flows out of `commands.ts` into `account-flows.ts`
 
 ### Target controller responsibilities
 
