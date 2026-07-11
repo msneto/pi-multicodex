@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AccountManager } from "./account-manager";
 import { registerCommands } from "./commands";
 import type { MultiCodexController } from "./multicodex-controller";
@@ -24,8 +24,14 @@ function createStatusControllerMock() {
 			accountLabelMaxChars: 14,
 		})),
 		getRotationSummaryLines: vi.fn(() => ["prefer untouched: on"]),
+		setManualAccount: vi.fn(),
 	} as unknown as MultiCodexController;
 }
+
+afterEach(() => {
+	vi.clearAllMocks();
+	vi.restoreAllMocks();
+});
 
 function createAccountManagerMock(emails: string[] = []) {
 	return {

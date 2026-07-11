@@ -1,7 +1,6 @@
 import { promises as fs, constants as fsConstants } from "node:fs";
 import path from "node:path";
 import type {
-	ExtensionAPI,
 	ExtensionCommandContext,
 	ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
@@ -70,22 +69,6 @@ export interface MultiCodexController {
 	getRotationSummaryLines(): string[];
 	getVerifySummary(): Promise<VerifySummary>;
 	resetState(target: ResetTarget): ResetSummary;
-	runAccountsCommand(
-		pi: ExtensionAPI,
-		ctx: ExtensionCommandContext,
-		rest: string,
-	): Promise<void>;
-	runShowCommand(pi: ExtensionAPI, ctx: ExtensionCommandContext): Promise<void>;
-	runRefreshCommand(
-		pi: ExtensionAPI,
-		ctx: ExtensionCommandContext,
-		rest: string,
-	): Promise<void>;
-	runReauthCommand(
-		pi: ExtensionAPI,
-		ctx: ExtensionCommandContext,
-		rest: string,
-	): Promise<void>;
 	runFooterCommand(ctx: ExtensionCommandContext): Promise<void>;
 	runRotationCommand(ctx: ExtensionCommandContext): Promise<void>;
 	runReportCommand(ctx: ExtensionCommandContext): Promise<void>;
@@ -327,40 +310,6 @@ export function createMultiCodexController(
 		statusController.stopAutoRefresh(ctx);
 	}
 
-	async function runAccountsCommand(
-		pi: ExtensionAPI,
-		ctx: ExtensionCommandContext,
-		rest: string,
-	): Promise<void> {
-		const { runAccountsSubcommand } = await import("./commands");
-		await runAccountsSubcommand(pi, ctx, accountManager, controller, rest);
-	}
-	async function runShowCommand(
-		pi: ExtensionAPI,
-		ctx: ExtensionCommandContext,
-	): Promise<void> {
-		const { runShowSubcommand } = await import("./commands");
-		await runShowSubcommand(pi, ctx, accountManager, controller);
-	}
-
-	async function runRefreshCommand(
-		pi: ExtensionAPI,
-		ctx: ExtensionCommandContext,
-		rest: string,
-	): Promise<void> {
-		const { runRefreshSubcommand } = await import("./commands");
-		await runRefreshSubcommand(pi, ctx, accountManager, controller, rest);
-	}
-
-	async function runReauthCommand(
-		pi: ExtensionAPI,
-		ctx: ExtensionCommandContext,
-		rest: string,
-	): Promise<void> {
-		const { runReauthSubcommand } = await import("./commands");
-		await runReauthSubcommand(pi, ctx, accountManager, controller, rest);
-	}
-
 	async function runFooterCommand(ctx: ExtensionCommandContext): Promise<void> {
 		if (!ctx.hasUI) {
 			await controller.loadPreferences(ctx);
@@ -510,10 +459,6 @@ export function createMultiCodexController(
 		refreshFor: (ctx: ExtensionContext) => statusController.refreshFor(ctx),
 		startSession,
 		stopSession,
-		runAccountsCommand,
-		runShowCommand,
-		runRefreshCommand,
-		runReauthCommand,
 		scheduleModelSelectRefresh: (ctx: ExtensionContext) =>
 			statusController.scheduleModelSelectRefresh(ctx),
 		startAutoRefresh: () => statusController.startAutoRefresh(),
