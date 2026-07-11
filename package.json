@@ -36,6 +36,7 @@
 		"browser.ts",
 		"commands.ts",
 		"extension.ts",
+		"error-format.ts",
 		"hooks.ts",
 		"index.ts",
 		"multicodex-controller.ts",
@@ -86,9 +87,9 @@
 		"@biomejs/biome": "^2.4.7",
 		"@commitlint/cli": "^20.4.4",
 		"@commitlint/config-conventional": "^20.4.4",
-		"@earendil-works/pi-ai": "^0.79.6",
-		"@earendil-works/pi-coding-agent": "^0.79.6",
-		"@earendil-works/pi-tui": "^0.79.6",
+		"@earendil-works/pi-ai": "^0.80.6",
+		"@earendil-works/pi-coding-agent": "^0.80.6",
+		"@earendil-works/pi-tui": "^0.80.6",
 		"@semantic-release/changelog": "^6.0.3",
 		"@semantic-release/commit-analyzer": "^13.0.1",
 		"@semantic-release/git": "^10.0.1",
@@ -104,6 +105,5 @@
 	},
 	"engines": {
 		"node": ">=24.14.0"
-	},
-	"dependencies": {}
+	}
 }
