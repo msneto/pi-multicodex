@@ -52,9 +52,13 @@ describe("AccountManager.ensureValidToken — concurrent refresh deduplication",
 		});
 
 		let callCount = 0;
-		(refreshOpenAICodexToken as unknown as {
-			mockImplementation: (impl: (...args: unknown[]) => Promise<unknown>) => void;
-		}).mockImplementation(async () => {
+		(
+			refreshOpenAICodexToken as unknown as {
+				mockImplementation: (
+					impl: (...args: unknown[]) => Promise<unknown>,
+				) => void;
+			}
+		).mockImplementation(async () => {
 			callCount++;
 			await refreshBarrier; // hold until we release
 			return {
@@ -108,9 +112,17 @@ describe("AccountManager.ensureValidToken — concurrent refresh deduplication",
 			expiresAt: Date.now() - 60_000,
 		});
 
-		(refreshOpenAICodexToken as unknown as {
-			mockImplementation: (impl: (rt: string) => Promise<{ access: string; refresh: string; expires: number }>) => void;
-		}).mockImplementation(async (rt) => ({
+		(
+			refreshOpenAICodexToken as unknown as {
+				mockImplementation: (
+					impl: (rt: string) => Promise<{
+						access: string;
+						refresh: string;
+						expires: number;
+					}>,
+				) => void;
+			}
+		).mockImplementation(async (rt) => ({
 			access: `new-${rt}`,
 			refresh: `refreshed-${rt}`,
 			expires: Date.now() + 3_600_000,

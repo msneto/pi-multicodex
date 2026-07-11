@@ -73,7 +73,9 @@ describe("createMultiCodexController", () => {
 			mocked: true,
 		} as never);
 
-		const { createMultiCodexController } = await import("./multicodex-controller");
+		const { createMultiCodexController } = await import(
+			"./multicodex-controller"
+		);
 		const accountManager = createAccountManagerMock();
 		const controller = createMultiCodexController(accountManager);
 
@@ -116,7 +118,9 @@ describe("createMultiCodexController", () => {
 			.spyOn(rotationModule, "loadRotationSettings")
 			.mockReturnValue({ mocked: true } as never);
 
-		const { createMultiCodexController } = await import("./multicodex-controller");
+		const { createMultiCodexController } = await import(
+			"./multicodex-controller"
+		);
 		const accountManager = createAccountManagerMock();
 		const controller = createMultiCodexController(accountManager);
 		const ctx = { ui: { notify: vi.fn(), setStatus: vi.fn() } } as never;
@@ -153,7 +157,9 @@ describe("createMultiCodexController", () => {
 				}),
 		);
 
-		const { createMultiCodexController } = await import("./multicodex-controller");
+		const { createMultiCodexController } = await import(
+			"./multicodex-controller"
+		);
 		const controller = createMultiCodexController(accountManager);
 		const ctx = { ui: { notify: vi.fn(), setStatus: vi.fn() } } as never;
 

@@ -74,16 +74,24 @@ describe("multicodexExtension", () => {
 	});
 
 	it("routes session and status events to the helpers", async () => {
-		vi.spyOn(accountManagerModule.AccountManager.prototype, "setWarningHandler");
-		vi.spyOn(accountManagerModule.AccountManager.prototype, "resetSessionWarnings");
-		vi.spyOn(commandsModule, "registerCommands").mockImplementation(() => undefined);
+		vi.spyOn(
+			accountManagerModule.AccountManager.prototype,
+			"setWarningHandler",
+		);
+		vi.spyOn(
+			accountManagerModule.AccountManager.prototype,
+			"resetSessionWarnings",
+		);
+		vi.spyOn(commandsModule, "registerCommands").mockImplementation(
+			() => undefined,
+		);
 		const controller = createControllerMock();
 		const createControllerSpy = vi
 			.spyOn(controllerModule, "createMultiCodexController")
 			.mockReturnValue(controller as never);
-		vi.spyOn(providerModule, "buildMulticodexProviderConfig").mockReturnValue(
-			{ mocked: true } as never,
-		);
+		vi.spyOn(providerModule, "buildMulticodexProviderConfig").mockReturnValue({
+			mocked: true,
+		} as never);
 
 		const { default: multicodexExtension } = await import("./extension");
 		const handlers = new Map<string, (...args: unknown[]) => void>();
