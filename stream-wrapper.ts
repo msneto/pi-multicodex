@@ -93,7 +93,7 @@ export function createStreamWrapper(
 						{
 							...internalModel,
 							headers: {
-								...(internalModel.headers || {}),
+								...internalModel.headers,
 								"X-Multicodex-Account": account.email,
 							},
 						},
