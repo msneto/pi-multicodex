@@ -39,7 +39,7 @@ export default {
 		[
 			"@semantic-release/git",
 			{
-				assets: ["package.json", "pnpm-lock.yaml", "CHANGELOG.md"],
+				assets: ["package.json", "bun.lock", "CHANGELOG.md"],
 				message: String.raw`chore(release): \${nextRelease.version} [skip ci]
 
 \${nextRelease.notes}`,

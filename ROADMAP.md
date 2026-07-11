@@ -32,9 +32,8 @@ The current shipped behavior is:
 
 ## Operating principles
 
-- Keep npmjs as the canonical public distribution channel.
 - Keep the package npm-installable for pi users.
-- Use pnpm for local development.
+- Use bun for local development.
 - Keep releases small, validated, and repeatable.
 - Prefer explicit behavior over hidden heuristics.
 - Prefer one memorable top-level command over several loosely related commands.
@@ -48,8 +47,8 @@ The current shipped behavior is:
 
 - **Package name:** `@victor-software-house/pi-multicodex`
 - **Scope:** Codex only
-- **Local package manager:** pnpm
-- **Primary release path:** npmjs with trusted publishing
+- **Local package manager:** bun
+- **Local release flow:** bun release validation
 - **Storage file:** `~/.pi/agent/codex-accounts.json`
 - **Provider strategy:** own the normal `openai-codex` path directly
 - **Auth strategy:** auto-import pi's stored `openai-codex` auth when it is new or changed
@@ -321,26 +320,24 @@ Goal: confirm runtime behavior stays correct as the command model and controller
 Every release should continue to pass at least:
 
 ```bash
-pnpm check
+bun run check
 npm pack --dry-run
-pnpm release:dry
+bun run release:dry
 ```
 
 Target release flow:
 
 1. Write Conventional Commits.
-2. Merge to `main`.
-3. Let GitHub Actions run CI and `semantic-release` from `.github/workflows/publish.yml`.
-4. Let npm trusted publishing handle `npm publish --provenance` without long-lived npm tokens.
+2. Run `bun run release:dry`.
+3. Publish when needed.
 
 ## Final release validation
 
 Before treating the new release flow as fully settled, explicitly validate the full path:
 
-- [x] Run `pnpm check`
+- [x] Run `bun run check`
 - [x] Run `npm pack --dry-run`
-- [x] Configure npm trusted publishing for `.github/workflows/publish.yml`
-- [x] Verify the GitHub Actions trusted-publishing workflow completes successfully
+- [x] Verify the local release flow completes successfully
 - [x] Verify the new version is available on npmjs after a release-triggering commit
 - [x] Verify install or upgrade in pi from the published package after a release-triggering commit
 - [x] Verify the published tarball includes every runtime TypeScript module the extension imports
@@ -350,4 +347,4 @@ Before treating the new release flow as fully settled, explicitly validate the f
 - [ ] No cross-provider account orchestration
 - [ ] No attempt to become a generic auth manager for pi
 - [ ] No custom encryption implementation for local secrets
-- [ ] No Bun-first consumer install story
+- [ ] No extra package-manager support story

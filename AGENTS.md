@@ -106,9 +106,7 @@ When continuing work, prioritize these items before expanding scope:
 Run:
 
 ```bash
-npm run lint
-npm run tsgo
-npm run test
+bun run check
 ```
 
 Release validation:
@@ -122,22 +120,17 @@ npm pack --dry-run
 - Use `lefthook` for git hooks.
 - `mise run install` should install dependencies and run `lefthook install`.
 - Pre-push validation runs through `mise run pre-push`.
-- Keep pre-push checks aligned with CI:
-  - `pnpm check`
+- Keep pre-push checks aligned with local validation:
+  - `bun run check`
   - `npm pack --dry-run`
 
 ## Release workflow
 
-- Use `semantic-release` with npm trusted publishing.
-- Normal releases happen from merges to `main` through `.github/workflows/publish.yml`.
-- Enforce Conventional Commits with commitlint locally and in CI.
+- Use `bun run release:dry` when cutting a release.
+- Enforce Conventional Commits with commitlint locally.
 - Use `lefthook` for the local `commit-msg` hook.
-- Use `pnpm release:dry` for local release verification when needed.
+- Use `bun run release:dry` for local release verification when needed.
 - Do not use local `npm publish` for routine releases.
-- Keep the npm trusted publisher mapping aligned with:
-  - package: `@victor-software-house/pi-multicodex`
-  - repository: `victor-software-house/pi-multicodex`
-  - workflow file: `.github/workflows/publish.yml`
 
 ## Commit workflow
 

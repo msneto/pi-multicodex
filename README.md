@@ -46,7 +46,7 @@ Everything lives under one command: `/multicodex`.
 | `/multicodex footer` | Configure the usage footer display |
 | `/multicodex rotation` | Inspect and edit rotation settings |
 | `/multicodex report` | Show active account, why it was chosen, quota totals, and per-account status |
-| `/multicodex verify` | Check storage, settings, auth import, and reauth health |
+| `/multicodex verify` | Check storage, settings, rotation, auth import, and reauth health |
 | `/multicodex path` | Print storage and settings file locations |
 | `/multicodex reset [manual\|quota\|all]` | Clear manual override, quota cooldowns, or both |
 | `/multicodex help` | Print a compact usage line |
@@ -94,12 +94,12 @@ You can customize the separator, account-label width, which fields appear, and t
 
 ## Local development
 
-This repo uses `mise` for tool versions and `pnpm` for dependency management.
+This repo uses `mise` for tool versions and `bun` for dependency management.
 
 ```bash
 mise install          # pin tool versions
-pnpm install          # install dependencies
-pnpm check            # lint + typecheck + test
+bun install           # install dependencies
+bun run check         # lint + typecheck + test
 npm pack --dry-run    # verify package contents
 ```
 
@@ -122,9 +122,9 @@ No data is sent anywhere except to the Codex API endpoints for auth refresh and 
 
 ## Release process
 
-Releases are automated. Push a conventional commit to `main` and GitHub Actions handles versioning, changelog, npm publishing (via trusted publishing), and GitHub releases.
+Use conventional commits and `bun run release:dry` when you want to cut a release.
 
-Local push protection via `lefthook` runs the same checks as CI before every push.
+Local push protection via `lefthook` runs the same checks as local validation before every push.
 
 ## Roadmap
 
@@ -146,7 +146,7 @@ This fork diverged significantly:
 - **Non-interactive mode.** All inspection and recovery subcommands (`show`, `verify`, `path`, `reset`, `help`) work without a UI panel.
 - **Auth import.** Automatically imports pi's stored `openai-codex` credentials when they change, so existing pi logins work without re-entering them.
 - **Token refresh.** Proactively refreshes OAuth tokens before expiry instead of failing on stale credentials.
-- **Automated releases.** semantic-release with npm trusted publishing, commitlint, lefthook pre-push checks, and CI validation on every push.
+- **Local releases.** semantic-release with bun-based checks, commitlint, and lefthook pre-push validation.
 
 ### [calesennett/pi-codex-usage](https://github.com/calesennett/pi-codex-usage)
 
