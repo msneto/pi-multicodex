@@ -1,4 +1,4 @@
-import { getApiProvider, getModels } from "@earendil-works/pi-ai";
+import { getApiProvider, getModels } from "@earendil-works/pi-ai/compat";
 
 import type { AccountManager } from "./account-manager";
 import { createStreamWrapper } from "./stream-wrapper";
