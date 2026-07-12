@@ -29,7 +29,7 @@ The current shipped behavior is:
 - Login prompts open the browser and keep the raw login URL out of notifications and logs.
 - The usage footer uses a compact, configurable layout with separator and account-label truncation controls while still applying severity-based color tiers as quota depletes.
 - Footer settings are stored in `~/.pi/agent/settings.json` under `pi-multicodex`.
-- Managed account storage is stored in `~/.pi/agent/codex-accounts.json`, including `manuallyDisabled` account flags.
+- Managed account storage is stored in `~/.pi/agent/multicodex/accounts.json`, including `manuallyDisabled` account flags, and storage path collisions are surfaced clearly.
 - The behavior contract (selection priority, retry policy, manual override, error classification) is documented in README.
 - Rotation criteria are persisted in settings and documented in README, including the opt-in `capacity-first` mode, 5% per-window guard band, and `guardRelaxation` toggle.
 

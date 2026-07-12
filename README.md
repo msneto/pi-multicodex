@@ -118,8 +118,10 @@ MultiCodex stores all data locally under `~/.pi/agent/`:
 
 | File | Contents |
 |---|---|
-| `codex-accounts.json` | Managed account credentials and state, including `manuallyDisabled` flags |
+| `multicodex/accounts.json` | Managed account credentials and state, including `manuallyDisabled` flags |
 | `settings.json` (key `pi-multicodex`) | Footer display preferences |
+
+If a storage file path is occupied by a directory, MultiCodex reports the collision so you can remove the directory and retry.
 
 No data is sent anywhere except to the Codex API endpoints for auth refresh and usage queries.
 

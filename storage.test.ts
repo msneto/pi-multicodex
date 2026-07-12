@@ -20,7 +20,10 @@ function restoreFile(filePath: string, contents: Buffer | undefined): void {
 	}
 }
 
-function runStorageProbe(): { threw: boolean; accounts: Array<{ email: string; manuallyDisabled?: boolean }> } {
+function runStorageProbe(): {
+	saveError?: string;
+	accounts: Array<{ email: string; manuallyDisabled?: boolean }>;
+} {
 	const script = `
 		import fs from "node:fs";
 		import path from "node:path";
@@ -32,11 +35,11 @@ function runStorageProbe(): { threw: boolean; accounts: Array<{ email: string; m
 		try {
 			fs.rmSync(storagePath, { recursive: true, force: true });
 			fs.mkdirSync(storagePath, { recursive: true });
-			let threw = false;
+			let saveError;
 			try {
 				saveStorage({ version: 1, accounts: [] });
-			} catch {
-				threw = true;
+			} catch (error) {
+				saveError = error instanceof Error ? error.message : String(error);
 			}
 			fs.rmSync(storagePath, { recursive: true, force: true });
 			fs.mkdirSync(storagePath, { recursive: true });
@@ -58,7 +61,7 @@ function runStorageProbe(): { threw: boolean; accounts: Array<{ email: string; m
 				"utf8",
 			);
 			const data = loadStorage();
-			console.log(JSON.stringify({ threw, accounts: data.accounts }));
+			console.log(JSON.stringify({ saveError, accounts: data.accounts }));
 		} finally {
 			fs.rmSync(storagePath, { recursive: true, force: true });
 			if (originalStorage) {
@@ -77,7 +80,7 @@ function runStorageProbe(): { threw: boolean; accounts: Array<{ email: string; m
 		encoding: "utf8",
 	});
 	return JSON.parse(stdout.trim()) as {
-		threw: boolean;
+		saveError?: string;
 		accounts: Array<{ email: string; manuallyDisabled?: boolean }>;
 	};
 }
@@ -88,9 +91,9 @@ afterEach(() => {
 });
 
 describe("storage", () => {
-	it("rethrows write failures and keeps migrated storage available", () => {
+	it("reports directory collisions and keeps migrated storage available", () => {
 		const result = runStorageProbe();
-		expect(result.threw).toBe(true);
+		expect(result.saveError).toContain("expected storage file but found directory");
 		expect(result.accounts).toHaveLength(1);
 		expect(result.accounts[0]?.email).toBe("migrate@example.com");
 		expect(result.accounts[0]?.manuallyDisabled).toBe(true);

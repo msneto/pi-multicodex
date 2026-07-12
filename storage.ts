@@ -132,9 +132,18 @@ function needsLegacyStrip(raw: Record<string, unknown>): boolean {
 	return false;
 }
 
+function assertStorageFilePath(filePath: string): void {
+	if (!storageFs.existsSync(filePath)) return;
+	const stats = fs.statSync(filePath);
+	if (!stats.isFile()) {
+		throw new Error(`expected storage file but found ${stats.isDirectory() ? "directory" : "non-file"}`);
+	}
+}
+
 function readStorageFile(filePath: string): StorageData | undefined {
 	if (!storageFs.existsSync(filePath)) return undefined;
 	try {
+		assertStorageFilePath(filePath);
 		const text = storageFs.readFileSync(filePath, "utf-8");
 		const raw = JSON.parse(text) as Record<string, unknown>;
 		const needsMigration =
@@ -179,6 +188,7 @@ export function loadStorage(): StorageData {
 
 export function saveStorage(data: StorageData): void {
 	try {
+		assertStorageFilePath(STORAGE_FILE);
 		const dir = path.dirname(STORAGE_FILE);
 		if (!storageFs.existsSync(dir)) {
 			storageFs.mkdirSync(dir, { recursive: true });

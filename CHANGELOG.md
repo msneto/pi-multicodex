@@ -11,6 +11,7 @@
 
 * treat manually disabled accounts as hard-gated during rotation
 * verify rotation file writability and surface storage write failures
+* report storage file-vs-directory collisions clearly during load and save
 
 ## [2.3.1](https://github.com/victor-software-house/pi-multicodex/compare/v2.3.0...v2.3.1) (2026-03-30)
 
