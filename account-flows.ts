@@ -26,6 +26,7 @@ type AccountPanelResult =
 	| { action: "select"; email: string }
 	| { action: "refresh"; email: string }
 	| { action: "reauth"; email: string }
+	| { action: "toggle-disabled"; email: string }
 	| { action: "remove"; email: string }
 	| { action: "add" }
 	| undefined;
@@ -50,6 +51,7 @@ function getAccountTags(
 		manual?.email === account.email ? "manual" : null,
 		accountManager.isPiAuthAccount(account) ? "pi auth" : null,
 		account.needsReauth ? "needs reauth" : null,
+		account.manuallyDisabled ? "disabled" : null,
 		isPlaceholderAccount(account) ? "placeholder" : null,
 		quotaHit ? "quota" : null,
 		isUsageUntouched(usage) ? "untouched" : null,
@@ -246,6 +248,9 @@ async function openAccountManagementPanel(
 			if (text === "needs reauth") {
 				return theme.fg("error", `[${text}]`);
 			}
+			if (text === "disabled") {
+				return theme.fg("warning", `[${text}]`);
+			}
 			if (text === "placeholder") {
 				return theme.fg("warning", `[${text}]`);
 			}
@@ -275,9 +280,11 @@ async function openAccountManagementPanel(
 			);
 			const summaryColor = account.needsReauth
 				? "warning"
-				: isPlaceholderAccount(account)
-					? "muted"
-					: "dim";
+				: account.manuallyDisabled
+					? "warning"
+					: isPlaceholderAccount(account)
+						? "muted"
+						: "dim";
 			const secondary = theme.fg(
 				summaryColor,
 				formatUsageSummary(accountManager, account),
@@ -294,6 +301,7 @@ async function openAccountManagementPanel(
 					rawKeyHint("enter", "use"),
 					rawKeyHint("u", "refresh"),
 					rawKeyHint("r", "reauth"),
+					rawKeyHint("d", "toggle disable"),
 					rawKeyHint("n", "add"),
 					rawKeyHint("backspace", "remove"),
 					rawKeyHint("esc", "close"),
@@ -303,11 +311,13 @@ async function openAccountManagementPanel(
 					width - visibleWidth(title) - visibleWidth(hints),
 				);
 				const reauthCount = accountManager.getAccountsNeedingReauth().length;
+				const disabledCount = accounts.filter((account) => account.manuallyDisabled).length;
 				const placeholderCount = accounts.filter((account) =>
 					isPlaceholderAccount(account),
 				).length;
 				const status = [
 					`${accounts.length} account${accounts.length === 1 ? "" : "s"}`,
+					disabledCount > 0 ? `${disabledCount} disabled` : undefined,
 					reauthCount > 0 ? `${reauthCount} need reauth` : undefined,
 					placeholderCount > 0
 						? `${placeholderCount} placeholder${placeholderCount === 1 ? "" : "s"}`
@@ -443,6 +453,13 @@ async function openAccountManagementPanel(
 					}
 					return;
 				}
+				if (data.toLowerCase() === "d") {
+					const selected = getSelectedAccount();
+					if (selected) {
+						done({ action: "toggle-disabled", email: selected.email });
+					}
+					return;
+				}
 				if (matchesKey(data, "backspace")) {
 					const selected = getSelectedAccount();
 					if (selected) {
@@ -518,6 +535,23 @@ async function openAccountManagementFlow(
 				accountManager,
 				statusController,
 				result.email,
+			);
+			await statusController.refreshFor(ctx);
+			continue;
+		}
+
+		if (result.action === "toggle-disabled") {
+			const account = accountManager.getAccount(result.email);
+			if (!account) continue;
+			const nextState = !account.manuallyDisabled;
+			const changed = await accountManager.setAccountManuallyDisabled(
+				result.email,
+				nextState,
+			);
+			if (!changed) continue;
+			ctx.ui.notify(
+				`${nextState ? "Disabled" : "Enabled"} ${result.email}`,
+				"info",
 			);
 			await statusController.refreshFor(ctx);
 			continue;

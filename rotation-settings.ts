@@ -6,11 +6,12 @@ const SETTINGS_KEY = "pi-multicodex";
 const SETTINGS_FILE = LEGACY_SETTINGS_FILE;
 const CURRENT_VERSION = 1;
 
-export type SelectionStrategy = "lowest-usage" | "stable-weekly";
+export type SelectionStrategy = "lowest-usage" | "stable-weekly" | "capacity-first";
 export type RotationCooldown = "15m" | "1h" | "6h";
 export interface RotationSettings {
 	selectionStrategy: SelectionStrategy;
 	preferUntouched: boolean;
+	guardRelaxation: boolean;
 	unknownResetCooldown: RotationCooldown;
 	preStreamRetryLimit: number;
 }
@@ -18,6 +19,7 @@ export interface RotationSettings {
 export const DEFAULT_ROTATION_SETTINGS: RotationSettings = {
 	selectionStrategy: "lowest-usage",
 	preferUntouched: true,
+	guardRelaxation: false,
 	unknownResetCooldown: "1h",
 	preStreamRetryLimit: 5,
 };
@@ -43,7 +45,11 @@ function normalizeSelectionStrategy(
 	value: unknown,
 	legacyPreferWeeklyReset: unknown,
 ): SelectionStrategy {
-	if (value === "lowest-usage" || value === "stable-weekly") {
+	if (
+		value === "lowest-usage" ||
+		value === "stable-weekly" ||
+		value === "capacity-first"
+	) {
 		return value;
 	}
 	if (typeof legacyPreferWeeklyReset === "boolean") {
@@ -63,6 +69,10 @@ export function normalizeRotationSettings(value: unknown): RotationSettings {
 			typeof record?.preferUntouched === "boolean"
 				? record.preferUntouched
 				: DEFAULT_ROTATION_SETTINGS.preferUntouched,
+		guardRelaxation:
+			typeof record?.guardRelaxation === "boolean"
+				? record.guardRelaxation
+				: DEFAULT_ROTATION_SETTINGS.guardRelaxation,
 		unknownResetCooldown: normalizeRotationCooldown(
 			record?.unknownResetCooldown,
 		),
@@ -97,6 +107,7 @@ function getRotationRecord(
 		existing &&
 		("selectionStrategy" in existing ||
 			"preferUntouched" in existing ||
+			"guardRelaxation" in existing ||
 			"preferWeeklyReset" in existing ||
 			"unknownResetCooldown" in existing ||
 			"preStreamRetryLimit" in existing)
@@ -159,6 +170,7 @@ export function formatRotationSummaryLines(
 	return [
 		`rotation strategy: ${settings.selectionStrategy}`,
 		`prefer untouched: ${settings.preferUntouched ? "on" : "off"}`,
+		`guard relaxation: ${settings.guardRelaxation ? "on" : "off"}`,
 		`unknown-reset fallback: ${settings.unknownResetCooldown}`,
 		`pre-stream retry limit: ${settings.preStreamRetryLimit}`,
 	];

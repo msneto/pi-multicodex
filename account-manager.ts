@@ -273,6 +273,37 @@ export class AccountManager {
 		this.notifyStateChanged();
 	}
 
+	async setAccountManuallyDisabled(
+		email: string,
+		manuallyDisabled: boolean,
+	): Promise<boolean> {
+		const account = this.getAccount(email);
+		if (!account) return false;
+		if (account.manuallyDisabled === manuallyDisabled) return false;
+
+		const wasManual = this.manualEmail === email;
+		const wasActive = this.data.activeEmail === email;
+		account.manuallyDisabled = manuallyDisabled;
+		if (manuallyDisabled && wasManual) {
+			this.manualEmail = undefined;
+		}
+		this.save();
+		this.notifyStateChanged();
+
+		if (manuallyDisabled && (wasManual || wasActive)) {
+			const selected = await this.activateBestAccount({
+				excludeEmails: new Set([email]),
+			});
+			if (!selected && this.data.activeEmail === email) {
+				this.data.activeEmail = undefined;
+				this.save();
+				this.notifyStateChanged();
+			}
+		}
+
+		return true;
+	}
+
 	/**
 	 * Read pi's openai-codex auth from auth.json and expose it as a
 	 * memory-only ephemeral account. Never persists to codex-accounts.json.
@@ -452,6 +483,7 @@ export class AccountManager {
 	async activateBestAccount(options?: {
 		excludeEmails?: Set<string>;
 		signal?: AbortSignal;
+		requestCostEstimatePercent?: number;
 	}): Promise<Account | undefined> {
 		const now = Date.now();
 		this.clearExpiredExhaustion(now);
@@ -462,6 +494,7 @@ export class AccountManager {
 			excludeEmails: options?.excludeEmails,
 			now,
 			rotation: this.rotationPreferences,
+			requestCostEstimatePercent: options?.requestCostEstimatePercent,
 		});
 		if (selected) {
 			if (this.isPiAuthAccount(selected)) {

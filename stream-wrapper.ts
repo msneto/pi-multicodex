@@ -18,6 +18,20 @@ import {
 
 const DEFAULT_MAX_ROTATION_RETRIES = 5;
 
+function normalizeRequestCostEstimatePercent(
+	value: unknown,
+): number | undefined {
+	if (
+		typeof value !== "number" ||
+		!Number.isFinite(value) ||
+		value < 0 ||
+		value > 100
+	) {
+		return undefined;
+	}
+	return value;
+}
+
 type ApiProviderRef = {
 	streamSimple: (
 		model: Model<Api>,
@@ -44,6 +58,9 @@ export function createStreamWrapper(
 					accountManager.getRotationPreferences().preStreamRetryLimit ??
 					DEFAULT_MAX_ROTATION_RETRIES;
 				const excludedEmails = new Set<string>();
+				const requestCostEstimatePercent = normalizeRequestCostEstimatePercent(
+					options?.metadata?.multicodexRequestCostPercent,
+				);
 				for (let attempt = 0; attempt <= maxRotationRetries; attempt++) {
 					const now = Date.now();
 					const manual = accountManager.getAvailableManualAccount({
@@ -59,6 +76,7 @@ export function createStreamWrapper(
 						account = await accountManager.activateBestAccount({
 							excludeEmails: excludedEmails,
 							signal: options?.signal,
+							requestCostEstimatePercent,
 						});
 					}
 					if (!account) {

@@ -4,18 +4,33 @@ import type { AccountManager } from "./account-manager";
 import { runAccountsSubcommand } from "./account-flows";
 import type { MultiCodexController } from "./multicodex-controller";
 
-const authMocks = vi.hoisted(() => ({
-	loginOpenAICodex: vi.fn(),
-	openLoginInBrowser: vi.fn(),
-}));
+function getAuthMocks() {
+	const globalMocks = globalThis as typeof globalThis & {
+		__piMulticodexAuthMocks?: {
+			loginOpenAICodex: ReturnType<typeof vi.fn>;
+			openLoginInBrowser: ReturnType<typeof vi.fn>;
+		};
+	};
+
+	if (!globalMocks.__piMulticodexAuthMocks) {
+		globalMocks.__piMulticodexAuthMocks = {
+			loginOpenAICodex: vi.fn(),
+			openLoginInBrowser: vi.fn(),
+		};
+	}
+
+	return globalMocks.__piMulticodexAuthMocks;
+}
 
 vi.mock("@earendil-works/pi-ai/oauth", () => ({
-	loginOpenAICodex: authMocks.loginOpenAICodex,
+	loginOpenAICodex: getAuthMocks().loginOpenAICodex,
 }));
 
 vi.mock("./browser", () => ({
-	openLoginInBrowser: authMocks.openLoginInBrowser,
+	openLoginInBrowser: getAuthMocks().openLoginInBrowser,
 }));
+
+const authMocks = getAuthMocks();
 
 function createStatusControllerMock() {
 	return {
@@ -92,5 +107,43 @@ describe("runAccountsSubcommand", () => {
 			expect.anything(),
 		);
 		expect(logSpy).not.toHaveBeenCalled();
+	});
+
+	it("toggles manual disable from the accounts panel", async () => {
+		const account = {
+			email: "managed@example.com",
+			manuallyDisabled: false,
+		};
+		const accountManager = {
+			refreshUsageForAllAccounts: vi.fn().mockResolvedValue(undefined),
+			getAccount: vi.fn(() => account),
+			getAccounts: vi.fn(() => [account]),
+			setAccountManuallyDisabled: vi.fn().mockResolvedValue(true),
+		} as unknown as AccountManager;
+		const controller = createStatusControllerMock();
+		const notify = vi.fn();
+		const input = vi.fn();
+		const custom = vi
+			.fn()
+			.mockResolvedValueOnce({ action: "toggle-disabled", email: account.email })
+			.mockResolvedValueOnce(undefined);
+
+		await runAccountsSubcommand(
+			{ registerCommand: vi.fn() } as never,
+			{
+				hasUI: true,
+				ui: { notify, input, custom },
+			} as never,
+			accountManager,
+			controller,
+			"",
+		);
+
+		expect(accountManager.setAccountManuallyDisabled).toHaveBeenCalledWith(
+			account.email,
+			true,
+		);
+		expect(controller.refreshFor).toHaveBeenCalled();
+		expect(notify).toHaveBeenCalledWith(`Disabled ${account.email}`, "info");
 	});
 });

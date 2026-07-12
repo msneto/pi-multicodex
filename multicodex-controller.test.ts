@@ -1,24 +1,49 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-const fsMocks = vi.hoisted(() => ({
-	existsSync: vi.fn(),
-	mkdirSync: vi.fn(),
-	readFileSync: vi.fn(),
-	writeFileSync: vi.fn(),
-	promises: {
-		mkdir: vi.fn(),
-		access: vi.fn(),
-	},
-	constants: {
-		R_OK: 4,
-		W_OK: 2,
-	},
-}));
-
-vi.mock("node:fs", () => fsMocks);
 import type { AccountManager } from "./account-manager";
 import * as rotationModule from "./rotation-settings";
 import * as statusModule from "./status";
+
+function getFsMocks() {
+	const globalMocks = globalThis as typeof globalThis & {
+		__piMulticodexFsMocks?: {
+			existsSync: ReturnType<typeof vi.fn>;
+			mkdirSync: ReturnType<typeof vi.fn>;
+			readFileSync: ReturnType<typeof vi.fn>;
+			writeFileSync: ReturnType<typeof vi.fn>;
+			promises: {
+				mkdir: ReturnType<typeof vi.fn>;
+				access: ReturnType<typeof vi.fn>;
+			};
+			constants: {
+				R_OK: number;
+				W_OK: number;
+			};
+		};
+	};
+
+	if (!globalMocks.__piMulticodexFsMocks) {
+		globalMocks.__piMulticodexFsMocks = {
+			existsSync: vi.fn(),
+			mkdirSync: vi.fn(),
+			readFileSync: vi.fn(),
+			writeFileSync: vi.fn(),
+			promises: {
+				mkdir: vi.fn(),
+				access: vi.fn(),
+			},
+			constants: {
+				R_OK: 4,
+				W_OK: 2,
+			},
+		};
+	}
+
+	return globalMocks.__piMulticodexFsMocks;
+}
+
+vi.mock("node:fs", () => getFsMocks());
+
+const fsMocks = getFsMocks();
 
 function createStatusControllerMock() {
 	return {

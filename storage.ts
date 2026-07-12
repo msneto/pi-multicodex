@@ -3,6 +3,13 @@ import * as path from "node:path";
 import { formatMulticodexError } from "./error-format";
 import { LEGACY_STORAGE_FILE, MULTICODEX_ACCOUNTS_FILE } from "./paths";
 
+export const storageFs = {
+	existsSync: fs.existsSync,
+	readFileSync: fs.readFileSync,
+	writeFileSync: fs.writeFileSync,
+	mkdirSync: fs.mkdirSync,
+};
+
 const CURRENT_VERSION = 1;
 const SCHEMA_URL =
 	"https://raw.githubusercontent.com/victor-software-house/pi-multicodex/main/schemas/codex-accounts.schema.json";
@@ -16,6 +23,7 @@ export interface Account {
 	lastUsed?: number;
 	quotaExhaustedUntil?: number;
 	needsReauth?: boolean;
+	manuallyDisabled?: boolean;
 }
 
 export interface StorageData {
@@ -81,6 +89,8 @@ function normalizeAccount(value: unknown): Account | undefined {
 		account.quotaExhaustedUntil = record.quotaExhaustedUntil;
 	if (typeof record.needsReauth === "boolean")
 		account.needsReauth = record.needsReauth;
+	if (typeof record.manuallyDisabled === "boolean")
+		account.manuallyDisabled = record.manuallyDisabled;
 	return account;
 }
 
@@ -123,9 +133,9 @@ function needsLegacyStrip(raw: Record<string, unknown>): boolean {
 }
 
 function readStorageFile(filePath: string): StorageData | undefined {
-	if (!fs.existsSync(filePath)) return undefined;
+	if (!storageFs.existsSync(filePath)) return undefined;
 	try {
-		const text = fs.readFileSync(filePath, "utf-8");
+		const text = storageFs.readFileSync(filePath, "utf-8");
 		const raw = JSON.parse(text) as Record<string, unknown>;
 		const needsMigration =
 			!("version" in raw) ||
@@ -170,8 +180,8 @@ export function loadStorage(): StorageData {
 export function saveStorage(data: StorageData): void {
 	try {
 		const dir = path.dirname(STORAGE_FILE);
-		if (!fs.existsSync(dir)) {
-			fs.mkdirSync(dir, { recursive: true });
+		if (!storageFs.existsSync(dir)) {
+			storageFs.mkdirSync(dir, { recursive: true });
 		}
 		const output = {
 			$schema: SCHEMA_URL,
@@ -179,7 +189,7 @@ export function saveStorage(data: StorageData): void {
 			accounts: data.accounts,
 			activeEmail: data.activeEmail,
 		};
-		fs.writeFileSync(STORAGE_FILE, JSON.stringify(output, null, 2));
+		storageFs.writeFileSync(STORAGE_FILE, JSON.stringify(output, null, 2));
 	} catch (error) {
 		console.error(formatMulticodexError("save multicodex accounts", error));
 		throw error;

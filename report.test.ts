@@ -21,8 +21,10 @@ function createAccountManagerMock(options: {
 			secondary?: { usedPercent?: number; resetAt?: number };
 		}
 	>;
+	accounts?: Array<{ email: string; manuallyDisabled?: boolean }>;
 }) {
-	const accounts = [{ email: "a@example.com" }, { email: "b@example.com" }];
+	const accounts =
+		options.accounts ?? [{ email: "a@example.com" }, { email: "b@example.com" }];
 	return {
 		getAccounts: () => accounts,
 		getActiveAccount: () =>
@@ -144,6 +146,81 @@ describe("formatAccountReportLines", () => {
 		expect(lines).toContain("why: lowest max usage among rankable accounts");
 		expect(lines).toContain("  - b@example.com");
 		expect(lines).toContain("lost: max used is 20% higher than winner");
+	});
+
+	it("explains capacity-first guarded selection", () => {
+		vi.spyOn(Date, "now").mockReturnValue(NOW);
+		const accountManager = createAccountManagerMock({
+			activeEmail: "a@example.com",
+			rotation: {
+				...DEFAULT_ROTATION_SETTINGS,
+				selectionStrategy: "capacity-first",
+			},
+			accounts: [
+				{ email: "a@example.com" },
+				{ email: "b@example.com", manuallyDisabled: true },
+			],
+			usage: {
+				"a@example.com": {
+					primary: { usedPercent: 0, resetAt: NOW + 60_000 },
+					secondary: { usedPercent: 0, resetAt: NOW + 120_000 },
+				},
+				"b@example.com": {
+					primary: { usedPercent: 40, resetAt: NOW + 60_000 },
+					secondary: { usedPercent: 40, resetAt: NOW + 120_000 },
+				},
+			},
+		});
+
+		const lines = formatAccountReportLines(accountManager).join("\n");
+
+		expect(lines).toContain("rule: capacity-first");
+		expect(lines).toContain("guard band: 5% per window");
+		expect(lines).toContain("guard relaxation: off");
+		expect(lines).toContain("fit class: guarded-fit (summary assumes 0%)");
+		expect(lines).toContain(
+			"request cost estimate: unavailable (summary assumes 0%)",
+		);
+		expect(lines).toContain("untouched bonus: applied");
+		expect(lines).toContain("[disabled]");
+		expect(lines).toContain(
+			"why: tightest guarded fit among eligible accounts",
+		);
+	});
+
+	it("explains capacity-first relaxed fallback", () => {
+		vi.spyOn(Date, "now").mockReturnValue(NOW);
+		const accountManager = createAccountManagerMock({
+			activeEmail: "b@example.com",
+			rotation: {
+				...DEFAULT_ROTATION_SETTINGS,
+				selectionStrategy: "capacity-first",
+				guardRelaxation: true,
+			},
+			accounts: [{ email: "a@example.com" }, { email: "b@example.com" }],
+			usage: {
+				"a@example.com": {
+					primary: { usedPercent: 20, resetAt: NOW + 60_000 },
+				},
+				"b@example.com": {
+					primary: { usedPercent: 10, resetAt: NOW + 60_000 },
+				},
+			},
+		});
+
+		const lines = formatAccountReportLines(accountManager).join("\n");
+
+		expect(lines).toContain("rule: capacity-first + relaxed fallback");
+		expect(lines).toContain("guard band: 5% per window");
+		expect(lines).toContain("guard relaxation: on");
+		expect(lines).toContain("fit class: unknown-fit (summary assumes 0%)");
+		expect(lines).toContain(
+			"request cost estimate: unavailable (summary assumes 0%)",
+		);
+		expect(lines).toContain("missing usage penalty: partial usage data");
+		expect(lines).toContain(
+			"why: guarded candidates were unavailable, so the least certain fallback fit won",
+		);
 	});
 
 	it("shows usage pace tree per account", () => {

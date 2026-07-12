@@ -127,9 +127,16 @@ function createRotationSettingItems(settings: RotationSettings): SettingItem[] {
 		{
 			id: "selectionStrategy",
 			label: "Rotation strategy",
-			description: "Choose lowest usage or stable weekly burn across the week",
+			description: "Choose lowest usage, stable weekly burn, or capacity first",
 			currentValue: settings.selectionStrategy,
-			values: ["lowest-usage", "stable-weekly"],
+			values: ["lowest-usage", "stable-weekly", "capacity-first"],
+		},
+		{
+			id: "guardRelaxation",
+			label: "Guard relaxation",
+			description: "Let capacity first fall back when no guarded fit is available",
+			currentValue: getBooleanLabel(settings.guardRelaxation),
+			values: ["on", "off"],
 		},
 		{
 			id: "preferUntouched",
@@ -162,9 +169,14 @@ function applyRotationSettingChange(
 ): RotationSettings {
 	if (
 		id === "selectionStrategy" &&
-		(newValue === "lowest-usage" || newValue === "stable-weekly")
+		(newValue === "lowest-usage" ||
+			newValue === "stable-weekly" ||
+			newValue === "capacity-first")
 	) {
 		return { ...settings, selectionStrategy: newValue };
+	}
+	if (id === "guardRelaxation") {
+		return { ...settings, guardRelaxation: newValue === "on" };
 	}
 	if (id === "preferUntouched") {
 		return { ...settings, preferUntouched: newValue === "on" };

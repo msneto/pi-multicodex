@@ -10,11 +10,17 @@ describe("rotation settings", () => {
 	it("fills defaults from partial input", () => {
 		expect(
 			normalizeRotationSettings({
-				selectionStrategy: "stable-weekly",
+				selectionStrategy: "capacity-first",
 			}),
 		).toEqual({
 			...DEFAULT_ROTATION_SETTINGS,
-			selectionStrategy: "stable-weekly",
+			selectionStrategy: "capacity-first",
+		});
+	});
+
+	it("defaults guard relaxation to off", () => {
+		expect(normalizeRotationSettings({})).toMatchObject({
+			guardRelaxation: false,
 		});
 	});
 
@@ -42,6 +48,7 @@ describe("rotation settings", () => {
 		});
 
 		expect(lines).toContain("rotation strategy: stable-weekly");
+		expect(lines).toContain("guard relaxation: off");
 		expect(lines).toContain("pre-stream retry limit: 5");
 	});
 });

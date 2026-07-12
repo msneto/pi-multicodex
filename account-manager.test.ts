@@ -312,6 +312,54 @@ describe("AccountManager account deduplication", () => {
 	});
 });
 
+describe("AccountManager manual disable handling", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		mocks.storageData.accounts = [];
+		mocks.storageData.activeEmail = undefined;
+		mocks.loadImportedOpenAICodexAuth.mockResolvedValue(undefined);
+	});
+
+	it("clears manual pin and rotates when disabling the active account", async () => {
+		mocks.storageData.accounts = [
+			{
+				email: "active@example.com",
+				accessToken: "access",
+				refreshToken: "refresh",
+				expiresAt: Date.now() + 3_600_000,
+			},
+			{
+				email: "backup@example.com",
+				accessToken: "backup-access",
+				refreshToken: "backup-refresh",
+				expiresAt: Date.now() + 3_600_000,
+			},
+		];
+
+		const manager = new AccountManager();
+		manager.setActiveAccount("active@example.com");
+		manager.setManualAccount("active@example.com");
+		const rotateSpy = vi
+			.spyOn(manager, "activateBestAccount")
+			.mockResolvedValue(undefined);
+
+		const changed = await manager.setAccountManuallyDisabled(
+			"active@example.com",
+			true,
+		);
+
+		expect(changed).toBe(true);
+		expect(manager.getAccount("active@example.com")).toMatchObject({
+			manuallyDisabled: true,
+		});
+		expect(manager.getManualAccount()).toBeUndefined();
+		expect(rotateSpy).toHaveBeenCalledWith({
+			excludeEmails: new Set(["active@example.com"]),
+		});
+	});
+});
+
+
 describe("AccountManager token refresh errors", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();

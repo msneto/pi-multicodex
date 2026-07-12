@@ -1,9 +1,11 @@
 import type { AccountManager } from "./account-manager";
 import {
+	analyzeCapacityFirstAccount,
 	getStableWeeklyTier,
 	hasWeeklyQuota,
 	isAccountAvailable,
 	pickBestAccount,
+	type CapacityFirstAnalysis,
 } from "./selection";
 import type { Account } from "./storage";
 import {
@@ -40,6 +42,12 @@ function formatCountdown(resetAt?: number): string {
 function formatPercent(value?: number): string {
 	if (typeof value !== "number" || Number.isNaN(value)) return "--";
 	return `${Math.round(clampPercent(value))}%`;
+}
+
+function formatSignedPercent(value?: number): string {
+	if (typeof value !== "number" || Number.isNaN(value)) return "--";
+	const rounded = Math.round(value);
+	return `${rounded > 0 ? "+" : ""}${rounded}%`;
 }
 
 function formatRemainingPercent(usedPercent?: number): string {
@@ -117,6 +125,7 @@ function getReportTags(
 		manualEmail === account.email ? "manual" : null,
 		accountManager.isPiAuthAccount(account) ? "pi auth" : null,
 		account.needsReauth ? "needs reauth" : null,
+		account.manuallyDisabled ? "disabled" : null,
 		account.quotaExhaustedUntil && account.quotaExhaustedUntil > now
 			? "quota"
 			: null,
@@ -354,6 +363,35 @@ function formatAccountReasonLine(reason: string): string {
 	return `    - ${reason}`;
 }
 
+function formatCapacityFirstWhy(
+	analysis: CapacityFirstAnalysis,
+	selected: boolean,
+	guardRelaxation: boolean,
+): string {
+	if (!selected) {
+		return analysis.fitClass === "guarded-fit"
+			? "lost: tighter guarded fit won"
+			: analysis.fitClass === "raw-fit"
+				? "lost: fallback fit was tighter than this one"
+				: analysis.fitClass === "risky-fit"
+					? "lost: fallback fit had less deficit than this one"
+					: "lost: another fallback had more confidence";
+	}
+
+	if (analysis.fitClass === "guarded-fit") {
+		return guardRelaxation
+			? "why: tightest guarded fit won before fallback was needed"
+			: "why: tightest guarded fit among eligible accounts";
+	}
+	if (analysis.fitClass === "raw-fit") {
+		return "why: guarded candidates were unavailable, so the tightest fallback fit won";
+	}
+	if (analysis.fitClass === "risky-fit") {
+		return "why: guarded candidates were unavailable, so the least risky fallback fit won";
+	}
+	return "why: guarded candidates were unavailable, so the least certain fallback fit won";
+}
+
 function formatRankingDecisionSection(
 	accountManager: AccountManager,
 	accounts: Account[],
@@ -361,6 +399,7 @@ function formatRankingDecisionSection(
 	now: number,
 	activeAccount: Account | undefined,
 	manualAccount: Account | undefined,
+	requestCostEstimatePercent?: number,
 ): string[] {
 	const rotation = accountManager.getRotationPreferences();
 	const available = accounts.filter(
@@ -423,12 +462,18 @@ function formatRankingDecisionSection(
 		if (selectedEmail) {
 			lines.push(`  - current best: ${selectedEmail}`);
 		}
-		lines.push(
-			`  - rule: ${rotation.selectionStrategy}${rotation.preferUntouched ? " + untouched preference" : ""}`,
-		);
+		const ruleSuffix =
+			rotation.selectionStrategy === "capacity-first"
+				? rotation.guardRelaxation
+					? " + relaxed fallback"
+					: ""
+				: rotation.preferUntouched
+					? " + untouched preference"
+					: "";
+			lines.push(`  - rule: ${rotation.selectionStrategy}${ruleSuffix}`);
 	}
 
-	if (rotation.preferUntouched) {
+	if (rotation.preferUntouched && rotation.selectionStrategy !== "capacity-first") {
 		if (availableWithUsage.length === 0) {
 			lines.push("  - untouched filter: no usage-backed candidates");
 		} else if (untouchedRankable.length > 0) {
@@ -455,6 +500,10 @@ function formatRankingDecisionSection(
 			? sortStableWeeklyAccounts(stableRankable, usageByEmail, now)
 			: [];
 	const stableWinner = stableRanking[0];
+	const capacityWinnerAnalysis =
+		mode === "capacity-first" && selectedEmail
+			? analyzeCapacityFirstAccount(usageByEmail.get(selectedEmail), now, 0)
+			: undefined;
 
 	for (const account of accounts) {
 		const usage = usageByEmail.get(account.email);
@@ -488,14 +537,16 @@ function formatRankingDecisionSection(
 						"random fallback can pick it, but no usage score exists",
 					),
 				);
-			} else {
+				continue;
+			}
+			if (mode !== "capacity-first") {
 				lines.push(
 					formatAccountReasonLine(
 						"rotation would only rank it after usage arrives",
 					),
 				);
+				continue;
 			}
-			continue;
 		}
 
 		if (mode === "manual") {
@@ -528,6 +579,80 @@ function formatRankingDecisionSection(
 						: "lost: random fallback picked another eligible account",
 				),
 			);
+			continue;
+		}
+
+		if (mode === "capacity-first") {
+			const analysis = analyzeCapacityFirstAccount(
+				usage,
+				now,
+				requestCostEstimatePercent,
+			);
+			const requestCostLabel =
+				typeof requestCostEstimatePercent === "number"
+					? `${requestCostEstimatePercent}%`
+					: "unavailable (summary assumes 0%)";
+			const fitClassLabel =
+				typeof requestCostEstimatePercent === "number"
+					? analysis.fitClass
+					: `${analysis.fitClass} (summary assumes 0%)`;
+			lines.push(formatAccountReasonLine(`fit class: ${fitClassLabel}`));
+			lines.push(
+				formatAccountReasonLine(`guard band: ${analysis.guardBandPercent}% per window`),
+			);
+			lines.push(
+				formatAccountReasonLine(
+					`guard relaxation: ${rotation.guardRelaxation ? "on" : "off"}`,
+				),
+			);
+			lines.push(
+				formatAccountReasonLine(`request cost estimate: ${requestCostLabel}`),
+			);
+			lines.push(
+				formatAccountReasonLine(
+					`post-request headroom: ${formatSignedPercent(analysis.primaryAfterRequest)} / ${formatSignedPercent(analysis.secondaryAfterRequest)}`,
+				),
+			);
+			lines.push(
+				formatAccountReasonLine(
+					`post-guard headroom: ${formatSignedPercent(analysis.primaryGuardRemaining)} / ${formatSignedPercent(analysis.secondaryGuardRemaining)}`,
+				),
+			);
+			if (analysis.knownCount === 0) {
+				lines.push(
+					formatAccountReasonLine(
+						"missing usage penalty: no cached windows yet",
+					),
+				);
+			} else if (analysis.knownCount < 2) {
+				lines.push(
+					formatAccountReasonLine(
+						"missing usage penalty: partial usage data",
+					),
+				);
+			}
+			if (analysis.stale) {
+				lines.push(formatAccountReasonLine("stale usage penalty: applied"));
+			}
+			if (analysis.untouched) {
+				lines.push(formatAccountReasonLine("untouched bonus: applied"));
+			}
+			lines.push(
+				formatAccountReasonLine(
+					formatCapacityFirstWhy(
+						analysis,
+						isSelected,
+						rotation.guardRelaxation,
+					),
+				),
+			);
+			if (!isSelected && capacityWinnerAnalysis) {
+				lines.push(
+					formatAccountReasonLine(
+						`lost: ${capacityWinnerAnalysis.fitClass} winner had tighter headroom`,
+					),
+				);
+			}
 			continue;
 		}
 
@@ -661,6 +786,7 @@ function formatRankingDecisionSection(
 
 export function formatAccountReportLines(
 	accountManager: AccountManager,
+	requestCostEstimatePercent?: number,
 ): string[] {
 	const now = Date.now();
 	const accounts = accountManager.getAccounts();
@@ -704,6 +830,7 @@ export function formatAccountReportLines(
 			now,
 			activeAccount,
 			manualAccount,
+			requestCostEstimatePercent,
 		),
 
 		"\u200B",

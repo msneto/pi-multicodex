@@ -351,6 +351,210 @@ describe("pickBestAccount", () => {
 		expect(selected?.email).toBe("b");
 	});
 
+	it("excludes manually disabled accounts", () => {
+		const accounts = [
+			makeAccount("a", { manuallyDisabled: true }),
+			makeAccount("b"),
+		];
+		const usage = new Map([
+			[
+				"a",
+				{
+					primary: { usedPercent: 10, resetAt: 1000 },
+					secondary: { usedPercent: 10, resetAt: 1000 },
+					fetchedAt: 0,
+				},
+			],
+			[
+				"b",
+				{
+					primary: { usedPercent: 20, resetAt: 1000 },
+					secondary: { usedPercent: 20, resetAt: 1000 },
+					fetchedAt: 0,
+				},
+			],
+		]);
+
+		const selected = pickBestAccount(accounts, usage, {
+			now: 1000,
+			rotation: {
+				...DEFAULT_ROTATION_SETTINGS,
+				selectionStrategy: "capacity-first",
+			},
+			requestCostEstimatePercent: 10,
+		});
+		expect(selected?.email).toBe("b");
+	});
+
+	it("picks the tightest guarded fit", () => {
+		const accounts = [makeAccount("a"), makeAccount("b")];
+		const usage = new Map([
+			[
+				"a",
+				{
+					primary: { usedPercent: 30, resetAt: 5000 },
+					secondary: { usedPercent: 30, resetAt: 6000 },
+					fetchedAt: 0,
+				},
+			],
+			[
+				"b",
+				{
+					primary: { usedPercent: 60, resetAt: 5000 },
+					secondary: { usedPercent: 60, resetAt: 6000 },
+					fetchedAt: 0,
+				},
+			],
+		]);
+
+		const selected = pickBestAccount(accounts, usage, {
+			now: 0,
+			rotation: {
+				...DEFAULT_ROTATION_SETTINGS,
+				selectionStrategy: "capacity-first",
+				preferUntouched: false,
+			},
+			requestCostEstimatePercent: 10,
+		});
+		expect(selected?.email).toBe("b");
+	});
+
+	it("falls back to raw fit when guarded candidates are unavailable", () => {
+		const accounts = [makeAccount("a"), makeAccount("b")];
+		const usage = new Map([
+			[
+				"a",
+				{
+					primary: { usedPercent: 96, resetAt: 5000 },
+					secondary: { usedPercent: 96, resetAt: 6000 },
+					fetchedAt: 0,
+				},
+			],
+			[
+				"b",
+				{
+					primary: { usedPercent: 98, resetAt: 5000 },
+					secondary: { usedPercent: 98, resetAt: 6000 },
+					fetchedAt: 0,
+				},
+			],
+		]);
+
+		const guarded = pickBestAccount(accounts, usage, {
+			now: 0,
+			rotation: {
+				...DEFAULT_ROTATION_SETTINGS,
+				selectionStrategy: "capacity-first",
+				guardRelaxation: false,
+				preferUntouched: false,
+			},
+			requestCostEstimatePercent: 0,
+		});
+		expect(guarded).toBeUndefined();
+
+		const selected = pickBestAccount(accounts, usage, {
+			now: 0,
+			rotation: {
+				...DEFAULT_ROTATION_SETTINGS,
+				selectionStrategy: "capacity-first",
+				guardRelaxation: true,
+				preferUntouched: false,
+			},
+			requestCostEstimatePercent: 0,
+		});
+		expect(selected?.email).toBe("a");
+	});
+
+	it("falls back to risky fit when guarded candidates are unavailable", () => {
+		const accounts = [makeAccount("a"), makeAccount("b")];
+		const usage = new Map([
+			[
+				"a",
+				{
+					primary: { usedPercent: 60, resetAt: 5000 },
+					secondary: { usedPercent: 60, resetAt: 6000 },
+					fetchedAt: 0,
+				},
+			],
+			[
+				"b",
+				{
+					primary: { usedPercent: 75, resetAt: 5000 },
+					secondary: { usedPercent: 75, resetAt: 6000 },
+					fetchedAt: 0,
+				},
+			],
+		]);
+
+		const guarded = pickBestAccount(accounts, usage, {
+			now: 0,
+			rotation: {
+				...DEFAULT_ROTATION_SETTINGS,
+				selectionStrategy: "capacity-first",
+				guardRelaxation: false,
+				preferUntouched: false,
+			},
+			requestCostEstimatePercent: 50,
+		});
+		expect(guarded).toBeUndefined();
+
+		const selected = pickBestAccount(accounts, usage, {
+			now: 0,
+			rotation: {
+				...DEFAULT_ROTATION_SETTINGS,
+				selectionStrategy: "capacity-first",
+				guardRelaxation: true,
+				preferUntouched: false,
+			},
+			requestCostEstimatePercent: 50,
+		});
+		expect(selected?.email).toBe("a");
+	});
+
+	it("falls back to unknown fit when guarded candidates are unavailable", () => {
+		const accounts = [makeAccount("a"), makeAccount("b")];
+		const usage = new Map([
+			[
+				"a",
+				{
+					primary: { usedPercent: 25, resetAt: 5000 },
+					fetchedAt: 0,
+				},
+			],
+			[
+				"b",
+				{
+					primary: { usedPercent: 50, resetAt: 5000 },
+					fetchedAt: 0,
+				},
+			],
+		]);
+
+		const guarded = pickBestAccount(accounts, usage, {
+			now: 0,
+			rotation: {
+				...DEFAULT_ROTATION_SETTINGS,
+				selectionStrategy: "capacity-first",
+				guardRelaxation: false,
+				preferUntouched: false,
+			},
+			requestCostEstimatePercent: 20,
+		});
+		expect(guarded).toBeUndefined();
+
+		const selected = pickBestAccount(accounts, usage, {
+			now: 0,
+			rotation: {
+				...DEFAULT_ROTATION_SETTINGS,
+				selectionStrategy: "capacity-first",
+				guardRelaxation: true,
+				preferUntouched: false,
+			},
+			requestCostEstimatePercent: 20,
+		});
+		expect(selected?.email).toBe("b");
+	});
+
 	it("prefers lower usage over earlier weekly reset", () => {
 		const accounts = [makeAccount("a"), makeAccount("b")];
 		const usage = new Map([
@@ -511,6 +715,66 @@ describe("manual account selection", () => {
 		}
 
 		expect(cleared).toBe(true);
+		expect(headerEmail).toBe("auto@example.com");
+	});
+
+	it("threads request-cost metadata into auto selection", async () => {
+		const auto = makeAccount("auto@example.com");
+		let requestCostEstimatePercent: number | undefined;
+		let headerEmail: string | undefined;
+		const accountManager = {
+			waitUntilReady: async () => {},
+			syncImportedOpenAICodexAuth: async () => false,
+			getAvailableManualAccount: () => undefined,
+			hasManualAccount: () => false,
+			clearManualAccount: () => {},
+			activateBestAccount: async (options?: {
+				requestCostEstimatePercent?: number;
+			}) => {
+				requestCostEstimatePercent = options?.requestCostEstimatePercent;
+				return auto;
+			},
+			ensureValidToken: async () => "auto-token",
+			handleQuotaExceeded: async () => {},
+			getRotationPreferences: () => DEFAULT_ROTATION_SETTINGS,
+		} as unknown as AccountManager;
+
+		const baseProvider = {
+			streamSimple: (
+				model: { headers?: Record<string, string> },
+				_context: unknown,
+				_options?: unknown,
+			) => {
+				headerEmail = model.headers?.["X-Multicodex-Account"];
+				async function* inner() {
+					yield { type: "done" };
+				}
+				return inner() as unknown as AsyncIterable<unknown>;
+			},
+		};
+
+		const stream = createStreamWrapper(
+			accountManager,
+			baseProvider as unknown as BaseProvider,
+		)(
+			{
+				id: "test",
+				provider: "openai-codex",
+				api: "openai-codex-responses",
+			} as StreamModel,
+			{} as StreamContext,
+			{
+				metadata: {
+					multicodexRequestCostPercent: 37,
+				},
+			} as never,
+		);
+
+		for await (const _event of stream) {
+			// drain
+		}
+
+		expect(requestCostEstimatePercent).toBe(37);
 		expect(headerEmail).toBe("auto@example.com");
 	});
 
