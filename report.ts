@@ -408,7 +408,11 @@ function formatRankingDecisionSection(
 	const availableWithUsage = available.filter((account) =>
 		usageByEmail.has(account.email),
 	);
-	const selected = pickBestAccount(available, usageByEmail, { now, rotation });
+	const selected = pickBestAccount(available, usageByEmail, {
+		now,
+		rotation,
+		requestCostEstimatePercent,
+	});
 	const selectedEmail = selected?.email;
 	const untouchedRankable = availableWithUsage.filter((account) =>
 		isUsageUntouched(usageByEmail.get(account.email)),
@@ -502,7 +506,11 @@ function formatRankingDecisionSection(
 	const stableWinner = stableRanking[0];
 	const capacityWinnerAnalysis =
 		mode === "capacity-first" && selectedEmail
-			? analyzeCapacityFirstAccount(usageByEmail.get(selectedEmail), now, 0)
+			? analyzeCapacityFirstAccount(
+				usageByEmail.get(selectedEmail),
+				now,
+				requestCostEstimatePercent,
+			)
 			: undefined;
 
 	for (const account of accounts) {

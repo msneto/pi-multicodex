@@ -14,6 +14,7 @@ import {
 	parseCodexUsageResponse,
 	pickBestAccount,
 } from "./index";
+import { analyzeCapacityFirstAccount } from "./selection";
 
 describe("isQuotaErrorMessage", () => {
 	it("matches 429", () => {
@@ -351,6 +352,17 @@ describe("pickBestAccount", () => {
 		expect(selected?.email).toBe("b");
 	});
 
+	it("returns undefined when every account is hard-gated", () => {
+		const accounts = [
+			makeAccount("reauth@example.com", { needsReauth: true }),
+			makeAccount("disabled@example.com", { manuallyDisabled: true }),
+			makeAccount("quota@example.com", { quotaExhaustedUntil: 2000 }),
+		];
+
+		const selected = pickBestAccount(accounts, new Map(), { now: 1000 });
+		expect(selected).toBeUndefined();
+	});
+
 	it("excludes manually disabled accounts", () => {
 		const accounts = [
 			makeAccount("a", { manuallyDisabled: true }),
@@ -553,6 +565,85 @@ describe("pickBestAccount", () => {
 			requestCostEstimatePercent: 20,
 		});
 		expect(selected?.email).toBe("b");
+	});
+
+	it("treats a missing request-cost estimate like zero", () => {
+		const usage = {
+			primary: { usedPercent: 40, resetAt: 5000 },
+			secondary: { usedPercent: 50, resetAt: 6000 },
+			fetchedAt: 0,
+		};
+
+		expect(analyzeCapacityFirstAccount(usage, 0, undefined)).toEqual(
+			analyzeCapacityFirstAccount(usage, 0, 0),
+		);
+	});
+
+	it("classifies mixed-window edge cases", () => {
+		const primaryOnly = analyzeCapacityFirstAccount(
+			{
+				primary: { usedPercent: 25, resetAt: 1000 },
+				fetchedAt: 0,
+			},
+			0,
+			undefined,
+		);
+		expect(primaryOnly.fitClass).toBe("unknown-fit");
+		expect(primaryOnly.knownCount).toBe(1);
+		expect(primaryOnly.primaryRemaining).toBe(75);
+		expect(primaryOnly.secondaryRemaining).toBeUndefined();
+
+		const secondaryOnly = analyzeCapacityFirstAccount(
+			{
+				secondary: { usedPercent: 40, resetAt: 1000 },
+				fetchedAt: 0,
+			},
+			0,
+			undefined,
+		);
+		expect(secondaryOnly.fitClass).toBe("unknown-fit");
+		expect(secondaryOnly.knownCount).toBe(1);
+		expect(secondaryOnly.primaryRemaining).toBeUndefined();
+		expect(secondaryOnly.secondaryRemaining).toBe(60);
+
+		const missingBoth = analyzeCapacityFirstAccount({ fetchedAt: 0 }, 0, undefined);
+		expect(missingBoth.fitClass).toBe("unknown-fit");
+		expect(missingBoth.knownCount).toBe(0);
+		expect(missingBoth.primaryRemaining).toBeUndefined();
+		expect(missingBoth.secondaryRemaining).toBeUndefined();
+	});
+
+	it("prefers fresh usage over stale when fit ties", () => {
+		const accounts = [makeAccount("stale@example.com"), makeAccount("fresh@example.com")];
+		const usage = new Map([
+			[
+				"stale@example.com",
+				{
+					primary: { usedPercent: 40, resetAt: 5000 },
+					secondary: { usedPercent: 40, resetAt: 6000 },
+					fetchedAt: 10_000 - 5 * 60 * 1000 - 1,
+				},
+			],
+			[
+				"fresh@example.com",
+				{
+					primary: { usedPercent: 40, resetAt: 5000 },
+					secondary: { usedPercent: 40, resetAt: 6000 },
+					fetchedAt: 10_000,
+				},
+			],
+		]);
+
+		const selected = pickBestAccount(accounts, usage, {
+			now: 10_000,
+			rotation: {
+				...DEFAULT_ROTATION_SETTINGS,
+				selectionStrategy: "capacity-first",
+				preferUntouched: false,
+			},
+			requestCostEstimatePercent: 0,
+		});
+		expect(selected?.email).toBe("fresh@example.com");
 	});
 
 	it("prefers lower usage over earlier weekly reset", () => {
@@ -842,6 +933,74 @@ describe("manual account selection", () => {
 		expect(headers[0]).toBe("manual@example.com");
 		expect(headers[1]).toBe("auto@example.com");
 		expect(activateCount).toBe(1);
+	});
+
+	it("stops after the retry limit across two quota-failing accounts", async () => {
+		const first = makeAccount("first@example.com");
+		const second = makeAccount("second@example.com");
+		let activateCount = 0;
+		const headers: string[] = [];
+		const handleQuotaExceeded = vi.fn();
+		let streamCalls = 0;
+
+		const accountManager = {
+			waitUntilReady: async () => {},
+			syncImportedOpenAICodexAuth: async () => false,
+			getAvailableManualAccount: () => undefined,
+			hasManualAccount: () => false,
+			clearManualAccount: () => {},
+			activateBestAccount: async (options?: {
+				excludeEmails?: Set<string>;
+			}) => {
+				activateCount += 1;
+				if (options?.excludeEmails?.has(first.email)) return second;
+				return first;
+			},
+			ensureValidToken: async (account: Account) => `${account.email}-token`,
+			handleQuotaExceeded,
+			getRotationPreferences: () => ({
+				...DEFAULT_ROTATION_SETTINGS,
+				preStreamRetryLimit: 1,
+			}),
+		} as unknown as AccountManager;
+
+		const baseProvider = {
+			streamSimple: (
+				model: { headers?: Record<string, string> },
+				_context: unknown,
+				_options?: unknown,
+			) => {
+				headers.push(model.headers?.["X-Multicodex-Account"] || "");
+				streamCalls += 1;
+				async function* inner() {
+					yield { type: "error", error: { errorMessage: "quota exceeded" } };
+				}
+				return inner() as unknown as AsyncIterable<unknown>;
+			},
+		};
+
+		const stream = createStreamWrapper(
+			accountManager,
+			baseProvider as unknown as BaseProvider,
+		)(
+			{
+				id: "test",
+				provider: "openai-codex",
+				api: "openai-codex-responses",
+			} as StreamModel,
+			{} as StreamContext,
+		);
+
+		const events: Array<{ type?: string }> = [];
+		for await (const event of stream) {
+			events.push(event as { type?: string });
+		}
+
+		expect(headers).toEqual(["first@example.com", "second@example.com"]);
+		expect(activateCount).toBe(2);
+		expect(handleQuotaExceeded).toHaveBeenCalledTimes(1);
+		expect(events[events.length - 1]?.type).toBe("error");
+		expect(streamCalls).toBe(2);
 	});
 
 	it("skips auth-broken accounts before streaming and retries a healthy one", async () => {

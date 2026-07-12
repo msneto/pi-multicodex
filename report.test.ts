@@ -221,6 +221,38 @@ describe("formatAccountReportLines", () => {
 		expect(lines).toContain("after guard: +58% / +58%");
 	});
 
+	it("uses request-cost estimates in capacity-first winner narration", () => {
+		vi.spyOn(Date, "now").mockReturnValue(NOW);
+		const accountManager = createAccountManagerMock({
+			activeEmail: "a@example.com",
+			rotation: {
+				...DEFAULT_ROTATION_SETTINGS,
+				selectionStrategy: "capacity-first",
+				guardRelaxation: true,
+			},
+			lastRequestCostEstimatePercent: 37,
+			accounts: [{ email: "a@example.com" }, { email: "b@example.com" }],
+			usage: {
+				"a@example.com": {
+					primary: { usedPercent: 70, resetAt: NOW + 60_000 },
+					secondary: { usedPercent: 70, resetAt: NOW + 120_000 },
+				},
+				"b@example.com": {
+					primary: { usedPercent: 72, resetAt: NOW + 60_000 },
+					secondary: { usedPercent: 72, resetAt: NOW + 120_000 },
+				},
+			},
+		});
+
+		const lines = formatAccountReportLines(accountManager).join("\n");
+
+		expect(lines).toContain("current best: a@example.com");
+		expect(lines).toContain(
+			"why: guarded candidates were unavailable, so the least risky fallback fit won",
+		);
+		expect(lines).toContain("lost: risky-fit winner had tighter headroom");
+	});
+
 	it("explains capacity-first relaxed fallback", () => {
 		vi.spyOn(Date, "now").mockReturnValue(NOW);
 		const accountManager = createAccountManagerMock({
