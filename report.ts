@@ -596,26 +596,24 @@ function formatRankingDecisionSection(
 				typeof requestCostEstimatePercent === "number"
 					? analysis.fitClass
 					: `${analysis.fitClass} (summary assumes 0%)`;
-			lines.push(formatAccountReasonLine(`fit class: ${fitClassLabel}`));
+			lines.push(formatAccountReasonLine(`fit: ${fitClassLabel}`));
 			lines.push(
-				formatAccountReasonLine(`guard band: ${analysis.guardBandPercent}% per window`),
+				formatAccountReasonLine(`guard band: ${analysis.guardBandPercent}%/window`),
 			);
 			lines.push(
 				formatAccountReasonLine(
-					`guard relaxation: ${rotation.guardRelaxation ? "on" : "off"}`,
+					`guards: ${rotation.guardRelaxation ? "relaxed" : "on"}`,
+				),
+			);
+			lines.push(formatAccountReasonLine(`request cost: ${requestCostLabel}`));
+			lines.push(
+				formatAccountReasonLine(
+					`after request: ${formatSignedPercent(analysis.primaryAfterRequest)} / ${formatSignedPercent(analysis.secondaryAfterRequest)}`,
 				),
 			);
 			lines.push(
-				formatAccountReasonLine(`request cost estimate: ${requestCostLabel}`),
-			);
-			lines.push(
 				formatAccountReasonLine(
-					`post-request headroom: ${formatSignedPercent(analysis.primaryAfterRequest)} / ${formatSignedPercent(analysis.secondaryAfterRequest)}`,
-				),
-			);
-			lines.push(
-				formatAccountReasonLine(
-					`post-guard headroom: ${formatSignedPercent(analysis.primaryGuardRemaining)} / ${formatSignedPercent(analysis.secondaryGuardRemaining)}`,
+					`after guard: ${formatSignedPercent(analysis.primaryGuardRemaining)} / ${formatSignedPercent(analysis.secondaryGuardRemaining)}`,
 				),
 			);
 			if (analysis.knownCount === 0) {

@@ -175,12 +175,10 @@ describe("formatAccountReportLines", () => {
 		const lines = formatAccountReportLines(accountManager).join("\n");
 
 		expect(lines).toContain("rule: capacity-first");
-		expect(lines).toContain("guard band: 5% per window");
-		expect(lines).toContain("guard relaxation: off");
-		expect(lines).toContain("fit class: guarded-fit (summary assumes 0%)");
-		expect(lines).toContain(
-			"request cost estimate: unavailable (summary assumes 0%)",
-		);
+		expect(lines).toContain("guard band: 5%/window");
+		expect(lines).toContain("guards: on");
+		expect(lines).toContain("fit: guarded-fit (summary assumes 0%)");
+		expect(lines).toContain("request cost: unavailable (summary assumes 0%)");
 		expect(lines).toContain("untouched bonus: applied");
 		expect(lines).toContain("[disabled]");
 		expect(lines).toContain(
@@ -211,12 +209,10 @@ describe("formatAccountReportLines", () => {
 		const lines = formatAccountReportLines(accountManager).join("\n");
 
 		expect(lines).toContain("rule: capacity-first + relaxed fallback");
-		expect(lines).toContain("guard band: 5% per window");
-		expect(lines).toContain("guard relaxation: on");
-		expect(lines).toContain("fit class: unknown-fit (summary assumes 0%)");
-		expect(lines).toContain(
-			"request cost estimate: unavailable (summary assumes 0%)",
-		);
+		expect(lines).toContain("guard band: 5%/window");
+		expect(lines).toContain("guards: relaxed");
+		expect(lines).toContain("fit: unknown-fit (summary assumes 0%)");
+		expect(lines).toContain("request cost: unavailable (summary assumes 0%)");
 		expect(lines).toContain("missing usage penalty: partial usage data");
 		expect(lines).toContain(
 			"why: guarded candidates were unavailable, so the least certain fallback fit won",
