@@ -786,6 +786,9 @@ export function formatAccountReportLines(
 	accountManager: AccountManager,
 	requestCostEstimatePercent?: number,
 ): string[] {
+	const effectiveRequestCostEstimatePercent =
+		requestCostEstimatePercent ??
+		accountManager.getLastRequestCostEstimatePercent?.();
 	const now = Date.now();
 	const accounts = accountManager.getAccounts();
 	if (accounts.length === 0) {
@@ -828,7 +831,7 @@ export function formatAccountReportLines(
 			now,
 			activeAccount,
 			manualAccount,
-			requestCostEstimatePercent,
+			effectiveRequestCostEstimatePercent,
 		),
 
 		"\u200B",

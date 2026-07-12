@@ -88,6 +88,7 @@ function createAccountManagerMock(accountCount = 1) {
 		getActiveAccount: vi.fn(() => ({ email: "a0@example.com" })),
 		getConfigPaths: vi.fn(),
 		getRotationSummaryLines: vi.fn(() => ["prefer untouched: on"]),
+		getLastRequestCostEstimatePercent: vi.fn(() => undefined),
 		getCachedUsage: vi.fn(),
 		isPiAuthAccount: vi.fn(() => false),
 		clearAllQuotaExhaustion: vi.fn(() => 0),
@@ -271,6 +272,58 @@ describe("createMultiCodexController", () => {
 		expect(notify).toHaveBeenCalledWith(
 			expect.stringContaining("rotationSummary="),
 			"warning",
+		);
+	});
+
+	it("includes the stored request-cost estimate in report output", async () => {
+		const statusController = createStatusControllerMock();
+		vi.spyOn(statusModule, "createUsageStatusController").mockReturnValue(
+			statusController as never,
+		);
+		vi.spyOn(rotationModule, "loadRotationSettings").mockReturnValue({
+			mocked: true,
+		} as never);
+
+		const { createMultiCodexController } = await import(
+			"./multicodex-controller"
+		);
+		const accountManager = createAccountManagerMock();
+		accountManager.getRotationPreferences = vi.fn(() => ({
+			selectionStrategy: "capacity-first",
+			guardRelaxation: false,
+			preferUntouched: false,
+		}));
+		accountManager.getLastRequestCostEstimatePercent = vi.fn(() => 37);
+		accountManager.getAccounts = vi.fn(() => [
+			{ email: "a@example.com" },
+			{ email: "b@example.com" },
+		]);
+		accountManager.getActiveAccount = vi.fn(() => ({ email: "a@example.com" }));
+		accountManager.getCachedUsage = vi.fn((email: string) =>
+			email === "a@example.com"
+				? {
+					primary: { usedPercent: 0, resetAt: Date.now() + 60_000 },
+					secondary: { usedPercent: 0, resetAt: Date.now() + 120_000 },
+				}
+				: {
+					primary: { usedPercent: 20, resetAt: Date.now() + 60_000 },
+					secondary: { usedPercent: 20, resetAt: Date.now() + 120_000 },
+				},
+			);
+		const controller = createMultiCodexController(accountManager);
+		const notify = vi.fn();
+		const ctx = { hasUI: false, ui: { notify, setStatus: vi.fn() } } as never;
+
+		await controller.runReportCommand(ctx);
+
+		expect(accountManager.refreshUsageForAllAccounts).toHaveBeenCalledOnce();
+		expect(notify).toHaveBeenCalledWith(
+			expect.stringContaining("request cost: 37%"),
+			"info",
+		);
+		expect(notify).toHaveBeenCalledWith(
+			expect.stringContaining("after request: +63% / +63%"),
+			"info",
 		);
 	});
 });

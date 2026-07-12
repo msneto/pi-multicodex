@@ -312,6 +312,25 @@ describe("AccountManager account deduplication", () => {
 	});
 });
 
+describe("AccountManager request-cost context", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		mocks.storageData.accounts = [];
+		mocks.storageData.activeEmail = undefined;
+		mocks.loadImportedOpenAICodexAuth.mockResolvedValue(undefined);
+	});
+
+	it("records the latest request-cost estimate from auto selection", async () => {
+		const manager = new AccountManager();
+
+		expect(manager.getLastRequestCostEstimatePercent()).toBeUndefined();
+
+		await manager.activateBestAccount({ requestCostEstimatePercent: 37 });
+
+		expect(manager.getLastRequestCostEstimatePercent()).toBe(37);
+	});
+});
+
 describe("AccountManager manual disable handling", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();

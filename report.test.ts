@@ -22,6 +22,7 @@ function createAccountManagerMock(options: {
 		}
 	>;
 	accounts?: Array<{ email: string; manuallyDisabled?: boolean }>;
+	lastRequestCostEstimatePercent?: number;
 }) {
 	const accounts =
 		options.accounts ?? [{ email: "a@example.com" }, { email: "b@example.com" }];
@@ -33,6 +34,7 @@ function createAccountManagerMock(options: {
 			options.manualEmail ? { email: options.manualEmail } : undefined,
 		isPiAuthAccount: () => false,
 		getRotationPreferences: () => options.rotation ?? DEFAULT_ROTATION_SETTINGS,
+		getLastRequestCostEstimatePercent: () => options.lastRequestCostEstimatePercent,
 		getCachedUsage: (email: string) => options.usage?.[email],
 	} as unknown as AccountManager;
 }
@@ -184,6 +186,39 @@ describe("formatAccountReportLines", () => {
 		expect(lines).toContain(
 			"why: tightest guarded fit among eligible accounts",
 		);
+	});
+
+	it("uses the latest request-cost estimate when available", () => {
+		vi.spyOn(Date, "now").mockReturnValue(NOW);
+		const accountManager = createAccountManagerMock({
+			activeEmail: "a@example.com",
+			rotation: {
+				...DEFAULT_ROTATION_SETTINGS,
+				selectionStrategy: "capacity-first",
+			},
+			lastRequestCostEstimatePercent: 37,
+			accounts: [
+				{ email: "a@example.com" },
+				{ email: "b@example.com", manuallyDisabled: true },
+			],
+			usage: {
+				"a@example.com": {
+					primary: { usedPercent: 0, resetAt: NOW + 60_000 },
+					secondary: { usedPercent: 0, resetAt: NOW + 120_000 },
+				},
+				"b@example.com": {
+					primary: { usedPercent: 40, resetAt: NOW + 60_000 },
+					secondary: { usedPercent: 40, resetAt: NOW + 120_000 },
+				},
+			},
+		});
+
+		const lines = formatAccountReportLines(accountManager).join("\n");
+
+		expect(lines).toContain("fit: guarded-fit");
+		expect(lines).toContain("request cost: 37%");
+		expect(lines).toContain("after request: +63% / +63%");
+		expect(lines).toContain("after guard: +58% / +58%");
 	});
 
 	it("explains capacity-first relaxed fallback", () => {

@@ -27,6 +27,20 @@ import { appendUsageHistorySample } from "./usage-history";
 const USAGE_CACHE_TTL_MS = 5 * 60 * 1000;
 const USAGE_REQUEST_TIMEOUT_MS = 10 * 1000;
 
+function normalizeRequestCostEstimatePercent(
+	value: unknown,
+): number | undefined {
+	if (
+		typeof value !== "number" ||
+		!Number.isFinite(value) ||
+		value < 0 ||
+		value > 100
+	) {
+		return undefined;
+	}
+	return value;
+}
+
 type WarningHandler = (message: string) => void;
 type StateChangeHandler = () => void;
 
@@ -40,6 +54,7 @@ export class AccountManager {
 	private stateChangeHandlers = new Set<StateChangeHandler>();
 	private warnedAuthFailureEmails = new Set<string>();
 	private rotationPreferences: RotationSettings = DEFAULT_ROTATION_SETTINGS;
+	private lastRequestCostEstimatePercent?: number;
 	private readyPromise: Promise<void> = Promise.resolve();
 	private readyResolve?: () => void;
 
@@ -241,6 +256,10 @@ export class AccountManager {
 
 	getRotationSummaryLines(): string[] {
 		return formatRotationSummaryLines(this.rotationPreferences);
+	}
+
+	getLastRequestCostEstimatePercent(): number | undefined {
+		return this.lastRequestCostEstimatePercent;
 	}
 
 	loadRotationPreferences(preferences: RotationSettings): void {
@@ -485,6 +504,9 @@ export class AccountManager {
 		signal?: AbortSignal;
 		requestCostEstimatePercent?: number;
 	}): Promise<Account | undefined> {
+		this.lastRequestCostEstimatePercent = normalizeRequestCostEstimatePercent(
+			options?.requestCostEstimatePercent,
+		);
 		const now = Date.now();
 		this.clearExpiredExhaustion(now);
 		const accounts = this.getAccounts();
