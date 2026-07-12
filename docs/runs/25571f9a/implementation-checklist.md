@@ -87,7 +87,7 @@ verification
 
 result
 
-Passed; README, ROADMAP, and CHANGELOG each mention the new rotation contract and manual-disable state.
+Passed; README, ROADMAP, and CHANGELOG each mention the new rotation contract, manual-disable state, and request-cost threading.
 
 notes
 

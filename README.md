@@ -25,7 +25,7 @@ When you start a session, MultiCodex:
 1. Imports your existing pi Codex auth automatically (if present).
 2. Merges duplicate imported credentials into the managed pool so one account does not consume multiple rotation slots.
 3. Checks usage data across all managed accounts.
-4. Picks the best available account — untouched accounts first in the default mode, then the configured rotation strategy (default `lowest-usage`; optional `stable-weekly` smooths weekly burn; opt-in `capacity-first` uses a 5% guard band per window to preserve future headroom), then a random available account as fallback.
+4. Picks the best available account — untouched accounts first in the default mode, then the configured rotation strategy (default `lowest-usage`; optional `stable-weekly` smooths weekly burn; opt-in `capacity-first` uses a 5% guard band per window and the stream-provided request-cost estimate when available to preserve future headroom), then a random available account as fallback.
 
 If you pin a specific account from `/multicodex accounts` or `/multicodex use`, that account is used until it hits quota, fails auth validation, or you clear the override.
 
@@ -93,6 +93,7 @@ You can customize the separator, account-label width, which fields appear, and t
 - **Usage tracking.** Usage data is fetched from the Codex API and cached for 5 minutes per account. The footer renders cached data immediately and refreshes in the background.
 - **Rotation settings.** The rotation panel persists selection strategy (`lowest-usage`, `stable-weekly`, or `capacity-first`), the `guardRelaxation` toggle, untouched-account preference, unknown-reset fallback cooldown, and pre-stream retry count in `settings.json`. `capacity-first` keeps a 5% per-window guard band unless guard relaxation is enabled.
 - **Quota cooldown.** When an account is exhausted, it stays on cooldown until its next known reset time (or 1 hour if the reset time is unknown).
+- **Request-cost threading.** When stream metadata includes `multicodexRequestCostPercent`, MultiCodex feeds that estimate into `capacity-first` selection and caches it for `/multicodex report`; when it is missing, the report says the summary assumes 0%.
 - **Shared utility seams.** Provider mirroring, stream primitives, and `~/.pi/agent/*` path helpers are shared with `pi-credential-vault` through `@victor-software-house/pi-provider-utils`. MultiCodex still owns account storage, token policy, footer behavior, and command UX.
 
 ## Local development

@@ -3,6 +3,7 @@
 ### Features
 
 * add configurable rotation settings, including opt-in `capacity-first`, a 5% per-window guard band, and `guardRelaxation`
+* thread conservative request-cost estimates into `capacity-first` selection and `/multicodex report` summaries
 * add the `manuallyDisabled` hard gate and a manual-disable toggle in the `/multicodex accounts` panel
 * compact usage footer layout with separator and account-label truncation controls
 * switch local tooling to Bun and remove GitHub Actions workflows

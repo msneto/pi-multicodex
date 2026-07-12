@@ -2,24 +2,28 @@
 
 ## Verdict
 
-partial pass
+historical partial pass
 
 ## Summary
 
-The opt-in `capacity-first` path is implemented and stable defaults still work. It is not a full guarded-fit selector yet: the code is percentage-only, has no explicit guard bands, and its report output cannot explain the real request-cost used at selection time.
+This audit captures the state of `capacity-first` before the request-cost contract and manual-disable precedence were fully documented. At that point, the opt-in path existed and stable defaults still worked, but the report still lacked request-cost context and the selector was not yet described as a full guarded-fit model.
+
+For current behavior, use the resolved docs in `README.md` and `docs/runs/25571f9a/*`.
 
 ## Critical findings
 
-- No explicit guard-band model. “Guarded” only means `remainingAfterRequest >= 0` for both windows.
-- Report output is not request-aware. Capacity-first analysis is computed with request cost `0`.
-- Ranking is percentage-only. There is no absolute quota or limit model.
-- Ambiguous quota-like failures are not modeled separately; they become a hard cooldown path.
+- No explicit guard-band model at the time of this audit. “Guarded” only meant `remainingAfterRequest >= 0` for both windows.
+- Report output was not request-aware then. Capacity-first analysis was computed with request cost `0`.
+- Ranking was percentage-only. There was no absolute quota or limit model in the audit write-up.
+- Ambiguous quota-like failures were not modeled separately and fell into a hard cooldown path.
 
 ## Recommended next fixes
 
 1. Make report output honest when no request-cost context is available.
 2. Add a real guard-band model before describing this as guarded-fit.
 3. Decide whether quota-like failures should be soft-penalized or hard-gated.
+
+These notes are preserved for audit history; the current plan/docs now cover the request-cost and manual-disable contracts.
 
 ## Test results
 
