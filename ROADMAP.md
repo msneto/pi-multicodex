@@ -29,9 +29,9 @@ The current shipped behavior is:
 - Login prompts open the browser and keep the raw login URL out of notifications and logs.
 - The usage footer uses a compact, configurable layout with separator and account-label truncation controls while still applying severity-based color tiers as quota depletes.
 - Footer settings are stored in `~/.pi/agent/settings.json` under `pi-multicodex`.
-- Managed account storage is stored in `~/.pi/agent/codex-accounts.json`.
+- Managed account storage is stored in `~/.pi/agent/codex-accounts.json`, including `manuallyDisabled` account flags.
 - The behavior contract (selection priority, retry policy, manual override, error classification) is documented in README.
-- Rotation criteria are persisted in settings and documented in README.
+- Rotation criteria are persisted in settings and documented in README, including the opt-in `capacity-first` mode, 5% per-window guard band, and `guardRelaxation` toggle.
 
 ## Operating principles
 
@@ -213,12 +213,14 @@ Goal: make account rotation behavior explicit, configurable, and inspectable.
 - [x] Add a `/multicodex rotation` panel
 - [x] Persist rotation criteria in settings and apply them to account selection
 - [x] Expose the current rotation policy in `/multicodex show`
+- [x] Surface the `guardRelaxation` toggle in `/multicodex rotation`
 - [x] Expose a short rotation-health summary in `/multicodex verify` where practical
 
 ### Candidate settings to support
 
-- [x] selection strategy: lowest-usage or stable-weekly
+- [x] selection strategy: lowest-usage, stable-weekly, or opt-in capacity-first
 - [x] prefer untouched accounts
+- [x] guard relaxation for capacity-first fallback
 - [x] configurable fallback cooldown when reset time is unknown
 - [x] configurable retry count for pre-stream quota rotation
 - [x] explicit strategy selector instead of a weekly-reset toggle

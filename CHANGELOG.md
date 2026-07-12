@@ -2,12 +2,14 @@
 
 ### Features
 
-* add configurable rotation settings, rotation panel, quota report, and rotation-health summaries
+* add configurable rotation settings, including opt-in `capacity-first`, a 5% per-window guard band, and `guardRelaxation`
+* add the `manuallyDisabled` hard gate and a manual-disable toggle in the `/multicodex accounts` panel
 * compact usage footer layout with separator and account-label truncation controls
 * switch local tooling to Bun and remove GitHub Actions workflows
 
 ### Bug Fixes
 
+* treat manually disabled accounts as hard-gated during rotation
 * verify rotation file writability and surface storage write failures
 
 ## [2.3.1](https://github.com/victor-software-house/pi-multicodex/compare/v2.3.0...v2.3.1) (2026-03-30)

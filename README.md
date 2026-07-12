@@ -25,7 +25,7 @@ When you start a session, MultiCodex:
 1. Imports your existing pi Codex auth automatically (if present).
 2. Merges duplicate imported credentials into the managed pool so one account does not consume multiple rotation slots.
 3. Checks usage data across all managed accounts.
-4. Picks the best available account — untouched accounts first, then the configured rotation strategy (default lowest-usage; optional stable-weekly smooths weekly burn), then a random available account as fallback.
+4. Picks the best available account — untouched accounts first in the default mode, then the configured rotation strategy (default `lowest-usage`; optional `stable-weekly` smooths weekly burn; opt-in `capacity-first` uses a 5% guard band per window to preserve future headroom), then a random available account as fallback.
 
 If you pin a specific account from `/multicodex accounts` or `/multicodex use`, that account is used until it hits quota, fails auth validation, or you clear the override.
 
@@ -64,10 +64,11 @@ The `/multicodex accounts` panel merges the old `show` and `use` flows into one 
 - **enter** activates the highlighted account.
 - **u** refreshes token and usage health for the selected account.
 - **r** re-authenticates the selected account.
+- **d** toggles the selected account's manual disable flag.
 - **n** starts login for a new managed account.
 - **backspace** removes the selected account after confirmation.
 
-Each row shows the account identifier, active/manual state, reauth state, quota state, linked imported auth state, and cached 5-hour and weekly usage windows.
+Each row shows the account identifier, active/manual state, reauth state, `manuallyDisabled` state, quota state, linked imported auth state, and cached 5-hour and weekly usage windows.
 
 When you remove an active account, MultiCodex switches to the next available one automatically.
 
@@ -90,7 +91,7 @@ You can customize the separator, account-label width, which fields appear, and t
 - **Command routing.** `commands.ts` stays as the dispatcher and autocomplete registry, while account-flow orchestration lives in `account-flows.ts`.
 - **Session restoration.** On session start, MultiCodex waits for account restoration before refreshing the footer, so stale manual pins are revalidated before the new session renders.
 - **Usage tracking.** Usage data is fetched from the Codex API and cached for 5 minutes per account. The footer renders cached data immediately and refreshes in the background.
-- **Rotation settings.** The rotation panel persists selection strategy, untouched-account preference, unknown-reset fallback cooldown, and pre-stream retry count in `settings.json`.
+- **Rotation settings.** The rotation panel persists selection strategy (`lowest-usage`, `stable-weekly`, or `capacity-first`), the `guardRelaxation` toggle, untouched-account preference, unknown-reset fallback cooldown, and pre-stream retry count in `settings.json`. `capacity-first` keeps a 5% per-window guard band unless guard relaxation is enabled.
 - **Quota cooldown.** When an account is exhausted, it stays on cooldown until its next known reset time (or 1 hour if the reset time is unknown).
 - **Shared utility seams.** Provider mirroring, stream primitives, and `~/.pi/agent/*` path helpers are shared with `pi-credential-vault` through `@victor-software-house/pi-provider-utils`. MultiCodex still owns account storage, token policy, footer behavior, and command UX.
 
@@ -117,7 +118,7 @@ MultiCodex stores all data locally under `~/.pi/agent/`:
 
 | File | Contents |
 |---|---|
-| `codex-accounts.json` | Managed account credentials and state |
+| `codex-accounts.json` | Managed account credentials and state, including `manuallyDisabled` flags |
 | `settings.json` (key `pi-multicodex`) | Footer display preferences |
 
 No data is sent anywhere except to the Codex API endpoints for auth refresh and usage queries.
