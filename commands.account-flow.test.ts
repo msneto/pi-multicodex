@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { OAuthCredentials } from "@earendil-works/pi-ai/oauth";
 import type { AccountManager } from "./account-manager";
-import { runAccountsSubcommand } from "./account-flows";
+import { runAccountsSubcommand, runRefreshSubcommand } from "./account-flows";
 import type { MultiCodexController } from "./multicodex-controller";
 
 function getAuthMocks() {
@@ -145,5 +145,140 @@ describe("runAccountsSubcommand", () => {
 		);
 		expect(controller.refreshFor).toHaveBeenCalled();
 		expect(notify).toHaveBeenCalledWith(`Disabled ${account.email}`, "info");
+	});
+});
+
+describe("runRefreshSubcommand", () => {
+	it("reports a failed single-account usage refresh", async () => {
+		const account = { email: "usage@example.com" };
+		const accountManager = {
+			refreshUsageForAllAccounts: vi.fn().mockResolvedValue(undefined),
+			getAccount: vi.fn(() => account),
+			ensureValidToken: vi.fn().mockResolvedValue("token"),
+			refreshUsageForAccount: vi.fn().mockResolvedValue(undefined),
+			getAccounts: vi.fn(() => [account]),
+			getAccountsNeedingReauth: vi.fn(() => []),
+		} as unknown as AccountManager;
+		const controller = createStatusControllerMock();
+		const notify = vi.fn();
+
+		await runRefreshSubcommand(
+			{ registerCommand: vi.fn() } as never,
+			{ hasUI: false, ui: { notify, input: vi.fn() } } as never,
+			accountManager,
+			controller,
+			account.email,
+		);
+
+		expect(notify).toHaveBeenCalledWith(
+			expect.stringContaining("usage refresh failed"),
+			"warning",
+		);
+		expect(controller.refreshFor).toHaveBeenCalledOnce();
+	});
+
+	it("reports a successful single-account usage refresh", async () => {
+		const account = { email: "usage@example.com" };
+		const accountManager = {
+			refreshUsageForAllAccounts: vi.fn().mockResolvedValue(undefined),
+			getAccount: vi.fn(() => account),
+			ensureValidToken: vi.fn().mockResolvedValue("token"),
+			refreshUsageForAccount: vi.fn().mockResolvedValue({
+				primary: { usedPercent: 10, resetAt: 1 },
+				secondary: { usedPercent: 20, resetAt: 2 },
+				fetchedAt: 3,
+			}),
+			getAccounts: vi.fn(() => [account]),
+			getAccountsNeedingReauth: vi.fn(() => []),
+			getCachedUsage: vi.fn(() => ({
+				primary: { usedPercent: 10, resetAt: 1 },
+				secondary: { usedPercent: 20, resetAt: 2 },
+			})),
+			getActiveAccount: vi.fn(() => account),
+			getManualAccount: vi.fn(() => undefined),
+			isPiAuthAccount: vi.fn(() => false),
+		} as unknown as AccountManager;
+		const controller = createStatusControllerMock();
+		const notify = vi.fn();
+
+		await runRefreshSubcommand(
+			{ registerCommand: vi.fn() } as never,
+			{ hasUI: false, ui: { notify, input: vi.fn() } } as never,
+			accountManager,
+			controller,
+			account.email,
+		);
+
+		expect(accountManager.ensureValidToken).toHaveBeenCalledWith(account);
+		expect(accountManager.refreshUsageForAccount).toHaveBeenCalledWith(account, {
+			force: true,
+		});
+		expect(notify).toHaveBeenCalledWith(
+			expect.stringContaining("refreshed usage@example.com"),
+			"info",
+		);
+		expect(controller.refreshFor).toHaveBeenCalledOnce();
+	});
+
+	it("reports a successful refresh-all summary", async () => {
+		const accounts = [{ email: "a@example.com" }, { email: "b@example.com" }];
+		const accountManager = {
+			refreshUsageForAllAccounts: vi.fn().mockResolvedValue(undefined),
+			getAccount: vi.fn(),
+			ensureValidToken: vi.fn(),
+			refreshUsageForAccount: vi
+				.fn()
+				.mockResolvedValueOnce({ primary: {}, secondary: {}, fetchedAt: 1 })
+				.mockResolvedValueOnce({ primary: {}, secondary: {}, fetchedAt: 2 }),
+			getAccounts: vi.fn(() => accounts),
+			getAccountsNeedingReauth: vi.fn(() => []),
+		} as unknown as AccountManager;
+		const controller = createStatusControllerMock();
+		const notify = vi.fn();
+
+		await runRefreshSubcommand(
+			{ registerCommand: vi.fn() } as never,
+			{ hasUI: false, ui: { notify, input: vi.fn() } } as never,
+			accountManager,
+			controller,
+			"all",
+		);
+
+		expect(notify).toHaveBeenCalledWith(
+			expect.stringContaining("refreshed 2 account(s); reauth needed=0"),
+			"info",
+		);
+		expect(controller.refreshFor).toHaveBeenCalledOnce();
+	});
+
+	it("summarizes partial failures for refresh all", async () => {
+		const accounts = [{ email: "a@example.com" }, { email: "b@example.com" }];
+		const accountManager = {
+			refreshUsageForAllAccounts: vi.fn().mockResolvedValue(undefined),
+			getAccount: vi.fn(),
+			ensureValidToken: vi.fn(),
+			refreshUsageForAccount: vi
+				.fn()
+				.mockResolvedValueOnce({ primary: {}, secondary: {}, fetchedAt: 1 })
+				.mockResolvedValueOnce(undefined),
+			getAccounts: vi.fn(() => accounts),
+			getAccountsNeedingReauth: vi.fn(() => []),
+		} as unknown as AccountManager;
+		const controller = createStatusControllerMock();
+		const notify = vi.fn();
+
+		await runRefreshSubcommand(
+			{ registerCommand: vi.fn() } as never,
+			{ hasUI: false, ui: { notify, input: vi.fn() } } as never,
+			accountManager,
+			controller,
+			"all",
+		);
+
+		expect(notify).toHaveBeenCalledWith(
+			expect.stringContaining("refreshed 1/2 account(s); failed=1"),
+			"warning",
+		);
+		expect(controller.refreshFor).toHaveBeenCalledOnce();
 	});
 });

@@ -165,7 +165,20 @@ async function refreshSingleAccount(
 		return;
 	}
 
-	await accountManager.refreshUsageForAccount(account, { force: true });
+	const usage = await accountManager.refreshUsageForAccount(account, {
+		force: true,
+	});
+	if (!usage) {
+		ctx.ui.notify(
+			formatMulticodexError(
+				`refresh ${email}`,
+				new Error("usage refresh failed"),
+			),
+			"warning",
+		);
+		return;
+	}
+
 	ctx.ui.notify(
 		`refreshed ${formatAccountStatusLine(accountManager, email)}`,
 		"info",
@@ -176,14 +189,25 @@ async function refreshAllAccounts(
 	ctx: ExtensionCommandContext,
 	accountManager: AccountManager,
 ): Promise<void> {
-	await accountManager.refreshUsageForAllAccounts({ force: true });
 	const accounts = accountManager.getAccounts();
+	if (accounts.length === 0) {
+		ctx.ui.notify(NO_ACCOUNTS_MESSAGE, "warning");
+		return;
+	}
+
+	const results = await Promise.all(
+		accounts.map((account) =>
+			accountManager.refreshUsageForAccount(account, { force: true }),
+		),
+	);
+	const refreshed = results.filter((usage) => Boolean(usage)).length;
+	const failed = results.length - refreshed;
 	const needsReauth = accountManager.getAccountsNeedingReauth().length;
 	const summary =
-		accounts.length === 0
-			? NO_ACCOUNTS_MESSAGE
-			: `refreshed ${accounts.length} account(s); reauth needed=${needsReauth}`;
-	ctx.ui.notify(summary, needsReauth > 0 ? "warning" : "info");
+		failed > 0
+			? `refreshed ${refreshed}/${accounts.length} account(s); failed=${failed}; reauth needed=${needsReauth}`
+			: `refreshed ${refreshed} account(s); reauth needed=${needsReauth}`;
+	ctx.ui.notify(summary, failed > 0 ? "warning" : "info");
 }
 
 async function reauthenticateAccount(
