@@ -35,6 +35,8 @@ export interface VerifySummary {
 	activeAccount: string;
 	hasPiAuth: boolean;
 	needsReauth: number;
+	usageRefreshStatus: "ok" | "failed" | "skipped";
+	usageRefreshAccount?: string;
 	ok: boolean;
 }
 
@@ -226,27 +228,38 @@ export function createMultiCodexController(
 			MULTICODEX_USAGE_HISTORY_FILE,
 		);
 		const rotationWritable = await isWritableTargetFor(MULTICODEX_ROTATION_FILE);
-		const hasPiAuth = accountManager
-			.getAccounts()
-			.some((account) => accountManager.isPiAuthAccount(account));
-		const accounts = accountManager.getAccounts().length;
-		const activeAccount = accountManager.getActiveAccount()?.email ?? "none";
+		const accounts = accountManager.getAccounts();
+		const hasPiAuth = accounts.some((account) => accountManager.isPiAuthAccount(account));
+		const activeAccount = accountManager.getActiveAccount();
 		const needsReauth = accountManager.getAccountsNeedingReauth().length;
+		let usageRefreshStatus: VerifySummary["usageRefreshStatus"] = "skipped";
+		let usageRefreshAccount: string | undefined;
+		if (activeAccount) {
+			usageRefreshAccount = activeAccount.email;
+			usageRefreshStatus = (await accountManager.refreshUsageForAccount(activeAccount, {
+				force: true,
+			}))
+				? "ok"
+				: "failed";
+		}
 		return {
 			storageWritable,
 			settingsWritable,
 			historyWritable,
 			rotationWritable,
-			accounts,
-			activeAccount,
+			accounts: accounts.length,
+			activeAccount: activeAccount?.email ?? "none",
 			hasPiAuth,
 			needsReauth,
+			usageRefreshStatus,
+			usageRefreshAccount,
 			ok:
 				storageWritable &&
 				settingsWritable &&
 				historyWritable &&
 				rotationWritable &&
-				needsReauth === 0,
+				needsReauth === 0 &&
+				usageRefreshStatus !== "failed",
 		};
 	}
 
@@ -399,10 +412,14 @@ export function createMultiCodexController(
 		await controller.loadPreferences(ctx);
 		await controller.loadRotationPreferences();
 		const rotationSummary = controller.getRotationSummaryLines().join(" | ");
+		const usageRefreshSummary =
+			summary.usageRefreshStatus === "skipped"
+				? "usageRefresh=skipped"
+				: `usageRefresh=${summary.usageRefreshStatus} account=${summary.usageRefreshAccount}`;
 
 		if (!ctx.hasUI) {
 			ctx.ui.notify(
-				`verify: ${summary.ok ? "PASS" : "WARN"} storage=${summary.storageWritable ? "ok" : "fail"} settings=${summary.settingsWritable ? "ok" : "fail"} history=${summary.historyWritable ? "ok" : "fail"} rotation=${summary.rotationWritable ? "ok" : "fail"} accounts=${summary.accounts} active=${summary.activeAccount} piAuth=${summary.hasPiAuth ? "loaded" : "none"} needsReauth=${summary.needsReauth} rotationSummary=${rotationSummary}`,
+				`verify: ${summary.ok ? "PASS" : "WARN"} storage=${summary.storageWritable ? "ok" : "fail"} settings=${summary.settingsWritable ? "ok" : "fail"} history=${summary.historyWritable ? "ok" : "fail"} rotation=${summary.rotationWritable ? "ok" : "fail"} accounts=${summary.accounts} active=${summary.activeAccount} piAuth=${summary.hasPiAuth ? "loaded" : "none"} needsReauth=${summary.needsReauth} ${usageRefreshSummary} rotationSummary=${rotationSummary}`,
 				summary.ok ? "info" : "warning",
 			);
 			return;
@@ -417,6 +434,7 @@ export function createMultiCodexController(
 			`active account: ${summary.activeAccount}`,
 			`pi auth (ephemeral): ${summary.hasPiAuth ? "loaded" : "none"}`,
 			`accounts needing re-authentication: ${summary.needsReauth}`,
+			`usage refresh: ${summary.usageRefreshStatus}${summary.usageRefreshAccount ? ` (${summary.usageRefreshAccount})` : ""}`,
 			`rotation settings: ${rotationSummary}`,
 		]);
 	}

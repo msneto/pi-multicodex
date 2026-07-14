@@ -79,6 +79,11 @@ function createAccountManagerMock(accountCount = 1) {
 		beginInitialization: vi.fn(),
 		loadPiAuth: vi.fn().mockResolvedValue(undefined),
 		refreshUsageForAllAccounts: vi.fn().mockResolvedValue(undefined),
+		refreshUsageForAccount: vi.fn().mockResolvedValue({
+			primary: { usedPercent: 0, resetAt: Date.now() + 60_000 },
+			secondary: { usedPercent: 0, resetAt: Date.now() + 120_000 },
+			fetchedAt: Date.now(),
+		}),
 		getAccountsNeedingReauth: vi.fn(() => []),
 		getAvailableManualAccount: vi.fn(() => undefined),
 		hasManualAccount: vi.fn(() => false),
@@ -270,11 +275,80 @@ describe("createMultiCodexController", () => {
 			"warning",
 		);
 		expect(notify).toHaveBeenCalledWith(
+			expect.stringContaining("usageRefresh=ok account=a0@example.com"),
+			"warning",
+		);
+		expect(notify).toHaveBeenCalledWith(
 			expect.stringContaining("rotationSummary="),
 			"warning",
 		);
 	});
 
+	it("reports a failed usage refresh in verify output", async () => {
+		const statusController = createStatusControllerMock();
+		vi.spyOn(statusModule, "createUsageStatusController").mockReturnValue(
+			statusController as never,
+		);
+		vi.spyOn(rotationModule, "loadRotationSettings").mockReturnValue({
+			mocked: true,
+		} as never);
+		fsMocks.promises.mkdir.mockResolvedValue(undefined);
+		fsMocks.promises.access.mockResolvedValue(undefined);
+
+		const { createMultiCodexController } = await import(
+			"./multicodex-controller"
+		);
+		const accountManager = createAccountManagerMock();
+		accountManager.refreshUsageForAccount = vi.fn().mockResolvedValue(undefined);
+		const controller = createMultiCodexController(accountManager);
+		const notify = vi.fn();
+		const ctx = { hasUI: false, ui: { notify, setStatus: vi.fn() } } as never;
+
+		await controller.runVerifyCommand(ctx);
+
+		expect(notify).toHaveBeenCalledWith(
+			expect.stringContaining("usageRefresh=failed account=a0@example.com"),
+			"warning",
+		);
+		expect(notify).toHaveBeenCalledWith(
+			expect.stringContaining("verify: WARN"),
+			"warning",
+		);
+	});
+
+	it("skips usage refresh in verify output when no active account exists", async () => {
+		const statusController = createStatusControllerMock();
+		vi.spyOn(statusModule, "createUsageStatusController").mockReturnValue(
+			statusController as never,
+		);
+		vi.spyOn(rotationModule, "loadRotationSettings").mockReturnValue({
+			mocked: true,
+		} as never);
+		fsMocks.promises.mkdir.mockResolvedValue(undefined);
+		fsMocks.promises.access.mockResolvedValue(undefined);
+
+		const { createMultiCodexController } = await import(
+			"./multicodex-controller"
+		);
+		const accountManager = createAccountManagerMock();
+		accountManager.getActiveAccount = vi.fn(() => undefined);
+		accountManager.refreshUsageForAccount = vi.fn();
+		const controller = createMultiCodexController(accountManager);
+		const notify = vi.fn();
+		const ctx = { hasUI: false, ui: { notify, setStatus: vi.fn() } } as never;
+
+		await controller.runVerifyCommand(ctx);
+
+		expect(accountManager.refreshUsageForAccount).not.toHaveBeenCalled();
+		expect(notify).toHaveBeenCalledWith(
+			expect.stringContaining("usageRefresh=skipped"),
+			"info",
+		);
+		expect(notify).toHaveBeenCalledWith(
+			expect.stringContaining("verify: PASS"),
+			"info",
+		);
+	});
 	it("includes the stored request-cost estimate in report output", async () => {
 		const statusController = createStatusControllerMock();
 		vi.spyOn(statusModule, "createUsageStatusController").mockReturnValue(
