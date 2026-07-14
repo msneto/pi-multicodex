@@ -64,6 +64,7 @@
 		"test": "vitest run -c vitest.config.ts",
 		"tsgo": "tsgo -p tsconfig.json",
 		"generate:schema": "bun scripts/generate-schema.ts",
+		"context-check": "node scripts/context-check.mjs",
 		"check": "bun run lint && bun run tsgo && bun run test",
 		"pack:dry": "npm pack --dry-run",
 		"release:dry": "bunx semantic-release --dry-run"
