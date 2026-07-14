@@ -458,6 +458,75 @@ describe("AccountManager usage history", () => {
 	});
 });
 
+describe("AccountManager usage cache invalidation", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		mocks.storageData.accounts = [];
+		mocks.storageData.activeEmail = undefined;
+		mocks.loadImportedOpenAICodexAuth.mockResolvedValue(undefined);
+	});
+
+	it("refreshes partial weekly cache even when it is fresh", async () => {
+		mocks.storageData.accounts = [
+			{
+				email: "usage@example.com",
+				accessToken: "access",
+				refreshToken: "refresh",
+				expiresAt: Date.now() + 3600_000,
+				accountId: "acc-123",
+			},
+		];
+		let callCount = 0;
+		const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(
+			async () => {
+				callCount += 1;
+				return {
+					ok: true,
+					json: async () => ({
+						rate_limit:
+						callCount === 1
+							? {
+								primary_window: {
+									used_percent: 12,
+									reset_at: 1_700_000_001,
+								},
+							}
+							: {
+								primary_window: {
+									used_percent: 12,
+									reset_at: 1_700_000_001,
+								},
+								secondary_window: {
+									used_percent: 34,
+									reset_at: 1_700_000_002,
+								},
+							},
+					}),
+				} as never;
+			},
+		);
+
+		const manager = new AccountManager();
+		const account = manager.getAccount("usage@example.com");
+		expect(account).toBeDefined();
+		if (!account) return;
+
+		const firstUsage = await manager.refreshUsageForAccount(account, {
+			force: true,
+		});
+		expect(firstUsage?.secondary).toBeUndefined();
+
+		const secondUsage = await manager.refreshUsageForAccount(account);
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+		expect(secondUsage?.secondary?.usedPercent).toBe(34);
+		expect(secondUsage?.secondary?.resetAt).toBe(1_700_000_002_000);
+		const secondCallHeaders = new Headers(
+			(fetchMock.mock.calls[1]?.[1] as RequestInit | undefined)?.headers,
+		);
+		expect(secondCallHeaders.get("ChatGPT-Account-Id")).toBe("acc-123");
+	});
+});
+
 describe("AccountManager auth-failure warnings", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();

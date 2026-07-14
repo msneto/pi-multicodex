@@ -93,6 +93,10 @@ export class AccountManager {
 		}
 	}
 
+	private clearUsageCache(email: string): void {
+		this.usageCache.delete(email);
+	}
+
 	onStateChange(handler: StateChangeHandler): () => void {
 		this.stateChangeHandlers.add(handler);
 		return () => {
@@ -148,7 +152,7 @@ export class AccountManager {
 		const removedEmail = this.data.accounts[index]?.email;
 		this.data.accounts.splice(index, 1);
 		if (removedEmail) {
-			this.usageCache.delete(removedEmail);
+			this.clearUsageCache(removedEmail);
 			if (this.manualEmail === removedEmail) {
 				this.manualEmail = undefined;
 			}
@@ -196,6 +200,9 @@ export class AccountManager {
 			account.needsReauth = undefined;
 			this.warnedAuthFailureEmails.delete(account.email);
 			changed = true;
+		}
+		if (changed) {
+			this.clearUsageCache(account.email);
 		}
 		return changed;
 	}
@@ -331,11 +338,15 @@ export class AccountManager {
 	async loadPiAuth(): Promise<void> {
 		const imported = await loadImportedOpenAICodexAuth();
 		if (!imported) {
+			if (this.piAuthAccount) {
+				this.clearUsageCache(this.piAuthAccount.email);
+			}
 			this.piAuthAccount = undefined;
 			this.notifyStateChanged();
 			return;
 		}
 
+		this.clearUsageCache(imported.identifier);
 		const alreadyManaged = this.findManagedAccountByIdentity(
 			imported.identifier,
 			typeof imported.credentials.accountId === "string"
@@ -432,6 +443,25 @@ export class AccountManager {
 		this.notifyStateChanged();
 	}
 
+	private async refreshAccountIdentity(account: Account): Promise<string> {
+		if (this.isPiAuthAccount(account)) {
+			return this.ensureValidTokenForPiAuth(account);
+		}
+
+		const result = await refreshOpenAICodexToken(account.refreshToken);
+		account.accessToken = result.access;
+		account.refreshToken = result.refresh;
+		account.expiresAt = result.expires;
+		const accountId =
+			typeof result.accountId === "string" ? result.accountId : undefined;
+		if (accountId) {
+			account.accountId = accountId;
+		}
+		this.save();
+		this.notifyStateChanged();
+		return account.accessToken;
+	}
+
 	async refreshUsageForAccount(
 		account: Account,
 		options?: { force?: boolean; signal?: AbortSignal },
@@ -440,21 +470,31 @@ export class AccountManager {
 
 		const cached = this.usageCache.get(account.email);
 		const now = Date.now();
+		const cachedHasWeeklyQuota = typeof cached?.secondary !== "undefined";
 		if (
 			cached &&
 			!options?.force &&
-			now - cached.fetchedAt < USAGE_CACHE_TTL_MS
+			now - cached.fetchedAt < USAGE_CACHE_TTL_MS &&
+			cachedHasWeeklyQuota
 		) {
 			return cached;
 		}
 
 		try {
 			const token = await this.ensureValidToken(account);
-			const usage = await fetchCodexUsage(token, account.accountId, {
+			let usage = await fetchCodexUsage(token, account.accountId, {
 				scope: `usage fetch ${account.email}`,
 				signal: options?.signal,
 				timeoutMs: USAGE_REQUEST_TIMEOUT_MS,
 			});
+			if (!usage.secondary && !account.accountId) {
+				const refreshedToken = await this.refreshAccountIdentity(account);
+				usage = await fetchCodexUsage(refreshedToken, account.accountId, {
+					scope: `usage fetch ${account.email}`,
+					signal: options?.signal,
+					timeoutMs: USAGE_REQUEST_TIMEOUT_MS,
+				});
+			}
 			this.usageCache.set(account.email, usage);
 			appendUsageHistorySample({
 				ts: Date.now(),
@@ -628,15 +668,29 @@ export class AccountManager {
 	private async ensureValidTokenForPiAuth(account: Account): Promise<string> {
 		const latest = await loadImportedOpenAICodexAuth();
 		if (latest && Date.now() < latest.credentials.expires - 5 * 60 * 1000) {
-			account.accessToken = latest.credentials.access;
-			account.refreshToken = latest.credentials.refresh;
-			account.expiresAt = latest.credentials.expires;
+			let changed = false;
+			if (account.accessToken !== latest.credentials.access) {
+				account.accessToken = latest.credentials.access;
+				changed = true;
+			}
+			if (account.refreshToken !== latest.credentials.refresh) {
+				account.refreshToken = latest.credentials.refresh;
+				changed = true;
+			}
+			if (account.expiresAt !== latest.credentials.expires) {
+				account.expiresAt = latest.credentials.expires;
+				changed = true;
+			}
 			const accountId =
 				typeof latest.credentials.accountId === "string"
 					? latest.credentials.accountId
 					: undefined;
-			if (accountId) {
+			if (accountId && account.accountId !== accountId) {
 				account.accountId = accountId;
+				changed = true;
+			}
+			if (changed) {
+				this.clearUsageCache(account.email);
 			}
 			this.notifyStateChanged();
 			return account.accessToken;
