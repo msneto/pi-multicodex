@@ -19,7 +19,7 @@ The current shipped behavior is:
 
 - MultiCodex overrides the normal `openai-codex` provider path directly.
 - MultiCodex auto-imports pi's stored `openai-codex` OAuth auth when it is new or changed.
-- Imported Codex auth prefers stable `accountId` identity matching when available, so the same managed account is reused even if the visible label changes.
+- Imported Codex auth prefers stable `accountId` identity matching when available, and derives a real email label when the token exposes one, so the same managed account is reused even if the visible label changes.
 - MultiCodex uses one `/multicodex` command family with subcommands.
 - `/multicodex accounts` is the merged account-management surface for inspection, selection, refresh, re-authentication, add, and removal.
 - Command dispatch stays in `commands.ts` while account-flow orchestration lives in `account-flows.ts`.
@@ -146,7 +146,7 @@ Goal: make account inspection and switching consistent, direct, and easy to unde
 - [x] Show active account, manual override state, cooldown state, import source, and cached usage in a consistent format
 - [x] Improve select-or-login flow for unknown or stale identifiers
 - [x] Replace brittle string parsing in selection flows with structured item mapping
-- [ ] Replace imported-account fallback labels with real email identity when it can be derived safely
+- [x] Replace imported-account fallback labels with real email identity when it can be derived safely
 - [x] Make active-account information easier to understand during a session
 
 ### UX acceptance criteria
@@ -246,18 +246,18 @@ Goal: move from scattered command logic to one shared controller that owns confi
 - [x] Keep hooks and command handlers thin by pushing orchestration into the controller
 - [x] Extract account-management flows out of `commands.ts` into `account-flows.ts`
 
-### Target controller responsibilities
+### Controller responsibilities now covered
 
-- [ ] `getConfigPaths()`
-- [ ] `getFooterPreferences()`
-- [ ] `setFooterPreferences(...)`
-- [ ] `getRotationSettings()`
-- [ ] `setRotationSettings(...)`
-- [ ] `getRuntimeStatus()`
-- [ ] `refreshRuntimeStatus()`
-- [ ] `setManualAccount(...)`
-- [ ] `clearManualAccount()`
-- [ ] `reset(...)`
+- [x] `getConfigPaths()`
+- [x] `loadPreferences()` / `getPreferences()`
+- [x] `setFooterPreferences(...)`
+- [x] `loadRotationPreferences()` / `getRotationPreferences()`
+- [x] `setRotationPreferences(...)`
+- [x] `getVerifySummary()`
+- [x] `refreshStatus(...)`
+- [x] `setManualAccount(...)`
+- [x] `clearManualAccount()`
+- [x] `resetState(...)`
 
 ### Architecture acceptance criteria
 
@@ -277,7 +277,7 @@ Outcome: extension health is inspectable and recoverable from the command family
 - [x] Verify settings storage readability and writability
 - [x] Verify importable `openai-codex` auth visibility
 - [x] Verify active-account resolution state
-- [ ] Verify usage refresh behavior and report failures concisely
+- [x] Verify usage refresh behavior and report failures concisely
 - [x] Add `/multicodex path`
 - [x] Show managed account storage path and settings path
 - [x] Add `/multicodex reset`

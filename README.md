@@ -46,7 +46,7 @@ Everything lives under one command: `/multicodex`.
 | `/multicodex footer` | Configure the usage footer display |
 | `/multicodex rotation` | Inspect and edit rotation settings |
 | `/multicodex report` | Show active account, why it was chosen, quota totals, and per-account status |
-| `/multicodex verify` | Check storage, settings, rotation, auth import, and reauth health |
+| `/multicodex verify` | Check storage, settings, rotation, auth import, reauth, and usage refresh health |
 | `/multicodex path` | Print storage and settings file locations |
 | `/multicodex reset [manual\|quota\|all]` | Clear manual override, quota cooldowns, or both |
 | `/multicodex help` | Print a compact usage line |
