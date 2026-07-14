@@ -3,7 +3,7 @@ import {
 	refreshOpenAICodexToken,
 } from "@earendil-works/pi-ai/oauth";
 import { loadImportedOpenAICodexAuth } from "./auth";
-import { formatMulticodexError, formatMulticodexMessage } from "./error-format";
+import { formatMulticodexMessage } from "./error-format";
 import {
 	DEFAULT_ROTATION_SETTINGS,
 	formatRotationSummaryLines,
@@ -455,7 +455,6 @@ export class AccountManager {
 		const inflight = this.usageRefreshPromises.get(account.email);
 		if (inflight) {
 			return inflight;
-		}
 		}
 
 		const promise = (async () => {
