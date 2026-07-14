@@ -439,6 +439,8 @@ export function createUsageStatusController(accountManager: AccountManager) {
 	let lifecycleGeneration = 0;
 	let preferences: FooterPreferences = DEFAULT_PREFERENCES;
 	let livePreviewPreferences: FooterPreferences | undefined;
+	let lastRenderedStatus: string | undefined;
+	let lastRenderedContext: ExtensionContext | undefined;
 
 	accountManager.onStateChange(() => {
 		if (!activeContext) return;
@@ -446,6 +448,8 @@ export function createUsageStatusController(accountManager: AccountManager) {
 	});
 
 	function clearStatus(ctx?: ExtensionContext): void {
+		lastRenderedStatus = undefined;
+		lastRenderedContext = undefined;
 		ctx?.ui.setStatus(STATUS_KEY, undefined);
 	}
 
@@ -493,7 +497,9 @@ export function createUsageStatusController(accountManager: AccountManager) {
 		}
 
 		const text = getStatusText(ctx, preferencesOverride);
-		if (text) {
+		if (text && (text !== lastRenderedStatus || lastRenderedContext !== ctx)) {
+			lastRenderedStatus = text;
+			lastRenderedContext = ctx;
 			ctx.ui.setStatus(STATUS_KEY, text);
 		}
 	}
@@ -515,10 +521,15 @@ export function createUsageStatusController(accountManager: AccountManager) {
 		const activeAccount = accountManager.getActiveAccount();
 		if (!activeAccount) {
 			if (!isCurrentLifecycle(generation)) return;
-			ctx.ui.setStatus(
-				STATUS_KEY,
-				ctx.ui.theme.fg("warning", "Multicodex no active account"),
+			const warning = ctx.ui.theme.fg(
+				"warning",
+				"Multicodex no active account",
 			);
+			if (warning !== lastRenderedStatus || lastRenderedContext !== ctx) {
+				lastRenderedStatus = warning;
+				lastRenderedContext = ctx;
+				ctx.ui.setStatus(STATUS_KEY, warning);
+			}
 			return;
 		}
 
@@ -527,15 +538,17 @@ export function createUsageStatusController(accountManager: AccountManager) {
 			(await accountManager.refreshUsageForAccount(activeAccount)) ??
 			cachedUsage;
 		if (!isCurrentLifecycle(generation)) return;
-		ctx.ui.setStatus(
-			STATUS_KEY,
-			formatActiveAccountStatus(
-				ctx,
-				activeAccount.email,
-				usage,
-				livePreviewPreferences ?? preferences,
-			),
+		const nextStatus = formatActiveAccountStatus(
+			ctx,
+			activeAccount.email,
+			usage,
+			livePreviewPreferences ?? preferences,
 		);
+		if (nextStatus !== lastRenderedStatus || lastRenderedContext !== ctx) {
+			lastRenderedStatus = nextStatus;
+			lastRenderedContext = ctx;
+			ctx.ui.setStatus(STATUS_KEY, nextStatus);
+		}
 	}
 
 	async function refreshFor(

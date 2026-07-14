@@ -456,6 +456,47 @@ describe("AccountManager usage history", () => {
 			}),
 		);
 	});
+
+	it("deduplicates concurrent usage refreshes for the same account", async () => {
+		mocks.storageData.accounts = [
+			{
+				email: "usage@example.com",
+				accessToken: "access",
+				refreshToken: "refresh",
+				expiresAt: Date.now() + 3600_000,
+			},
+		];
+		let resolveJson: (() => void) | undefined;
+		const jsonPromise = new Promise<{ rate_limit: {
+			primary_window: { used_percent: number; reset_at: number };
+			secondary_window: { used_percent: number; reset_at: number };
+		} }>((resolve) => {
+			resolveJson = () =>
+				resolve({
+					rate_limit: {
+						primary_window: { used_percent: 12, reset_at: 1_700_000_001 },
+						secondary_window: { used_percent: 34, reset_at: 1_700_000_002 },
+					},
+				});
+		});
+		const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+			ok: true,
+			json: () => jsonPromise,
+		} as never);
+
+		const manager = new AccountManager();
+		const account = manager.getAccount("usage@example.com");
+		expect(account).toBeDefined();
+		if (!account) return;
+
+		const first = manager.refreshUsageForAccount(account, { force: true });
+		const second = manager.refreshUsageForAccount(account, { force: true });
+		resolveJson?.();
+		await Promise.all([first, second]);
+
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+		expect(mocks.appendUsageHistorySample).toHaveBeenCalledTimes(1);
+	});
 });
 
 describe("AccountManager usage cache invalidation", () => {

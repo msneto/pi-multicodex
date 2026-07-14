@@ -49,6 +49,10 @@ export class AccountManager {
 	private piAuthAccount?: Account;
 	private usageCache = new Map<string, CodexUsageSnapshot>();
 	private refreshPromises = new Map<string, Promise<string>>();
+	private usageRefreshPromises = new Map<
+		string,
+		Promise<CodexUsageSnapshot | undefined>
+	>();
 	private warningHandler?: WarningHandler;
 	private manualEmail?: string;
 	private stateChangeHandlers = new Set<StateChangeHandler>();
@@ -480,36 +484,48 @@ export class AccountManager {
 			return cached;
 		}
 
-		try {
-			const token = await this.ensureValidToken(account);
-			let usage = await fetchCodexUsage(token, account.accountId, {
-				scope: `usage fetch ${account.email}`,
-				signal: options?.signal,
-				timeoutMs: USAGE_REQUEST_TIMEOUT_MS,
-			});
-			if (!usage.secondary && !account.accountId) {
-				const refreshedToken = await this.refreshAccountIdentity(account);
-				usage = await fetchCodexUsage(refreshedToken, account.accountId, {
+		const inflight = this.usageRefreshPromises.get(account.email);
+		if (inflight) {
+			return inflight;
+		}
+
+		const promise = (async () => {
+			try {
+				const token = await this.ensureValidToken(account);
+				let usage = await fetchCodexUsage(token, account.accountId, {
 					scope: `usage fetch ${account.email}`,
 					signal: options?.signal,
 					timeoutMs: USAGE_REQUEST_TIMEOUT_MS,
 				});
+				if (!usage.secondary && !account.accountId) {
+					const refreshedToken = await this.refreshAccountIdentity(account);
+					usage = await fetchCodexUsage(refreshedToken, account.accountId, {
+						scope: `usage fetch ${account.email}`,
+						signal: options?.signal,
+						timeoutMs: USAGE_REQUEST_TIMEOUT_MS,
+					});
+				}
+				this.usageCache.set(account.email, usage);
+				appendUsageHistorySample({
+					ts: Date.now(),
+					email: account.email,
+					primary: usage.primary,
+					secondary: usage.secondary,
+				});
+				this.notifyStateChanged();
+				return usage;
+			} catch (error) {
+				this.warningHandler?.(
+					formatMulticodexError(`usage fetch ${account.email}`, error),
+				);
+				return undefined;
+			} finally {
+				this.usageRefreshPromises.delete(account.email);
 			}
-			this.usageCache.set(account.email, usage);
-			appendUsageHistorySample({
-				ts: Date.now(),
-				email: account.email,
-				primary: usage.primary,
-				secondary: usage.secondary,
-			});
-			this.notifyStateChanged();
-			return usage;
-		} catch (error) {
-			this.warningHandler?.(
-				formatMulticodexError(`usage fetch ${account.email}`, error),
-			);
-			return undefined;
-		}
+		})();
+
+		this.usageRefreshPromises.set(account.email, promise);
+		return promise;
 	}
 
 	async refreshUsageForAllAccounts(options?: {

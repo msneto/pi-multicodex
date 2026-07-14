@@ -32,6 +32,8 @@ function runStorageProbe(): {
 		const { loadStorage, saveStorage } = await import("./storage.ts");
 		const originalStorage = fs.existsSync(storagePath) ? fs.readFileSync(storagePath) : null;
 		const originalLegacy = fs.existsSync(legacyPath) ? fs.readFileSync(legacyPath) : null;
+		const originalConsoleError = console.error;
+		console.error = () => {};
 		try {
 			fs.rmSync(storagePath, { recursive: true, force: true });
 			fs.mkdirSync(storagePath, { recursive: true });
@@ -63,6 +65,7 @@ function runStorageProbe(): {
 			const data = loadStorage();
 			console.log(JSON.stringify({ saveError, accounts: data.accounts }));
 		} finally {
+			console.error = originalConsoleError;
 			fs.rmSync(storagePath, { recursive: true, force: true });
 			if (originalStorage) {
 				fs.mkdirSync(path.dirname(storagePath), { recursive: true });
