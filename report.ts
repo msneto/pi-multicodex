@@ -367,8 +367,15 @@ function formatCapacityFirstWhy(
 	analysis: CapacityFirstAnalysis,
 	selected: boolean,
 	guardRelaxation: boolean,
+	hasWinner: boolean,
 ): string {
 	if (!selected) {
+		if (!hasWinner && analysis.fitClass === "unknown-fit") {
+			return "lost: no account had enough usage data to compare";
+		}
+		if (!hasWinner) {
+			return "lost: no guarded candidate was available";
+		}
 		return analysis.fitClass === "guarded-fit"
 			? "lost: tighter guarded fit won"
 			: analysis.fitClass === "raw-fit"
@@ -431,7 +438,9 @@ function formatRankingDecisionSection(
 	const stableWeeklyRandomFallback =
 		rotation.selectionStrategy === "stable-weekly" &&
 		stableRankable.length === 0;
-	const randomFallbackBecauseNoUsage = availableWithUsage.length === 0;
+	const randomFallbackBecauseNoUsage =
+		rotation.selectionStrategy !== "capacity-first" &&
+		availableWithUsage.length === 0;
 	const mode = !activeAccount
 		? "none"
 		: manualAccount?.email === activeAccount.email
@@ -649,6 +658,7 @@ function formatRankingDecisionSection(
 						analysis,
 						isSelected,
 						rotation.guardRelaxation,
+						Boolean(selectedEmail),
 					),
 				),
 			);

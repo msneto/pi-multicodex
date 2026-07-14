@@ -84,4 +84,30 @@ describe("capacity-first scenarios", () => {
 		const selected = selectCapacityFirst(accounts, usage, 10);
 		expect(selected?.email).toBe("tighter");
 	});
+
+	it("returns no account when capacity-first has no usage and guard relaxation is off", () => {
+		const accounts = [makeAccount("a@example.com"), makeAccount("b@example.com")];
+		const usage = new Map<string, ReturnType<typeof makeUsage>>();
+
+		const selected = selectCapacityFirst(accounts, usage, 10);
+		expect(selected).toBeUndefined();
+	});
+
+	it("falls back to the first account when capacity-first has no usage and guard relaxation is on", () => {
+		const accounts = [makeAccount("a@example.com"), makeAccount("b@example.com")];
+		const usage = new Map<string, ReturnType<typeof makeUsage>>();
+
+		const selected = pickBestAccount(accounts, usage, {
+			now: NOW,
+			rotation: {
+				...DEFAULT_ROTATION_SETTINGS,
+				selectionStrategy: "capacity-first",
+				guardRelaxation: true,
+				preferUntouched: false,
+			},
+			requestCostEstimatePercent: 10,
+		});
+
+		expect(selected?.email).toBe("a@example.com");
+	});
 });

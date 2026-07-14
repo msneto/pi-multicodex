@@ -253,6 +253,28 @@ describe("formatAccountReportLines", () => {
 		expect(lines).toContain("lost: risky-fit winner had tighter headroom");
 	});
 
+	it("explains capacity-first when no usage is available", () => {
+		vi.spyOn(Date, "now").mockReturnValue(NOW);
+		const accountManager = createAccountManagerMock({
+			activeEmail: "a@example.com",
+			rotation: {
+				...DEFAULT_ROTATION_SETTINGS,
+				selectionStrategy: "capacity-first",
+			},
+			usage: {},
+		});
+
+		const lines = formatAccountReportLines(accountManager).join("\n");
+
+		expect(lines).toContain("active: a@example.com");
+		expect(lines).toContain("rule: capacity-first");
+		expect(lines).toContain("fit: unknown-fit (summary assumes 0%)");
+		expect(lines).toContain("missing usage penalty: no cached windows yet");
+		expect(lines).toContain(
+			"lost: no account had enough usage data to compare",
+		);
+	});
+
 	it("explains capacity-first relaxed fallback", () => {
 		vi.spyOn(Date, "now").mockReturnValue(NOW);
 		const accountManager = createAccountManagerMock({

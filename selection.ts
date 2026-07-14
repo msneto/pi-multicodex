@@ -396,7 +396,6 @@ export function pickBestAccount(
 	}
 
 	if (availableCount === 0) return undefined;
-	if (withUsageCount === 0) return availableRandom;
 
 	if (rotation.selectionStrategy === "capacity-first") {
 		for (let index = 0; index < accounts.length; index += 1) {
@@ -445,6 +444,8 @@ export function pickBestAccount(
 		}
 		return undefined;
 	}
+
+	if (withUsageCount === 0) return availableRandom;
 
 	const useUntouched = rotation.preferUntouched && untouchedCount > 0;
 	if (rotation.selectionStrategy === "stable-weekly") {
